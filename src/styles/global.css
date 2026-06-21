@@ -1,8 +1,6 @@
 /* ── Corphy Page — Global Styles ── */
 /* Design System: Ocean/Space Corphish Theme */
 
-@import "./blog.css";
-
 :root {
   /* Colors */
   --color-bg: #0a0e17;

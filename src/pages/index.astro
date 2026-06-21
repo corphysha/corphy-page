@@ -1,6 +1,7 @@
 ---
 import { getCollection } from "astro:content";
 import Layout from "@/layouts/Layout.astro";
+import "@/styles/blog.css";
 
 const latestPosts = await getCollection("blog", ({ data }) =>
   import.meta.env.PROD ? !data.draft : true,
