@@ -1,16 +1,17 @@
 import { defineCollection, z } from "astro:content";
+import { glob } from "astro/loaders";
 
-const projects = defineCollection({
+const blog = defineCollection({
+  loader: glob({ pattern: "**/*.mdx", base: "./src/data/blog" }),
   schema: z.object({
     title: z.string().min(1, "Title is required"),
     description: z.string().min(1, "Description is required"),
-    url: z.string().url("Must be a valid URL").optional(),
-    github: z.string().url("Must be a valid GitHub URL").optional(),
+    date: z.coerce.date(),
+    updated: z.coerce.date().optional(),
     tags: z.array(z.string()).default([]),
-    featured: z.boolean().default(false),
+    draft: z.boolean().default(false),
+    image: z.string().optional(),
   }),
 });
 
-export const collections = {
-  projects,
-};
+export const collections = { blog };
