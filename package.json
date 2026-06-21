@@ -12,13 +12,24 @@
     "lint:fix": "biome lint --write src/",
     "format": "biome format --write src/",
     "check": "biome check --write src/",
-    "check:ci": "biome ci src/"
+    "check:ci": "biome ci src/",
+    "prepare": "husky"
   },
   "dependencies": {
     "astro": "^6.4.8",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.0"
+    "@biomejs/biome": "^2.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8"
+  },
+  "lint-staged": {
+    "*.{js,ts,jsx,tsx,mjs,cjs}": [
+      "biome check --write --no-errors-on-unmatched"
+    ],
+    "*.{astro,css,json,md,mjs}": [
+      "biome format --write --no-errors-on-unmatched"
+    ]
   }
 }
