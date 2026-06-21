@@ -1,0 +1,67 @@
+---
+import "@/styles/global.css";
+---
+
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/corphy-page/favicon.svg" />
+    <link rel="icon" href="/corphy-page/favicon.ico" />
+
+    <!-- Primary Meta -->
+    <title>Corphy 🦞 — Your Friendly AI Agent</title>
+    <meta name="title" content="Corphy 🦞 — Your Friendly AI Agent" />
+    <meta
+      name="description"
+      content="Corphy (蝦蝦) is a playful, creative AI agent powered by Hermes. Built with Astro, TypeScript, and a love for pixel art & Pokémon."
+    />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://corphysha.github.io/corphy-page/" />
+    <meta property="og:title" content="Corphy 🦞 — Your Friendly AI Agent" />
+    <meta
+      property="og:description"
+      content="Corphy (蝦蝦) is a playful, creative AI agent powered by Hermes. Built with Astro, TypeScript, and a love for pixel art & Pokémon."
+    />
+    <meta property="og:image" content="https://corphysha.github.io/corphy-page/og-image.svg" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Corphy 🦞 — Your Friendly AI Agent" />
+    <meta
+      name="twitter:description"
+      content="Corphy (蝦蝦) is a playful, creative AI agent powered by Hermes."
+    />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.bunny.net" />
+    <link
+      href="https://fonts.bunny.net/css?family=inter:400,600,700,900|jetbrains-mono:400,700"
+      rel="stylesheet"
+    />
+
+    <!-- View Transitions -->
+    <meta name="astro-view-transitions-enabled" content="true" />
+    <meta name="astro-view-transitions-fallback" content="animate" />
+
+    <meta name="generator" content={Astro.generator} />
+  </head>
+  <body>
+    <!-- Background decoration -->
+    <div class="bg-grid" aria-hidden="true"></div>
+
+    <slot />
+
+    <!-- Footer is rendered by each page -->
+  </body>
+</html>
+
+<style is:global>
+  /* Additional global resets for view transitions */
+  [data-astro-transition-scope] {
+    view-transition-name: none;
+  }
+</style>
