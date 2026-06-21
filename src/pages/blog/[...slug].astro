@@ -1,0 +1,40 @@
+---
+import { getCollection } from "astro:content";
+import BlogPostLayout from "@/layouts/BlogPostLayout.astro";
+
+export async function getStaticPaths() {
+  const posts = await getCollection("blog", ({ data }) =>
+    import.meta.env.PROD ? !data.draft : true,
+  );
+  return posts.map((post) => ({
+    params: { slug: post.id },
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props;
+const { Content } = await post.render();
+---
+
+<BlogPostLayout
+  title={post.data.title}
+  description={post.data.description}
+  image={post.data.image}
+  date={post.data.date}
+>
+  <div slot="tags">
+    {post.data.tags.length > 0 && (
+      <div class="blog-post-tags">
+        {post.data.tags.map((tag) => (
+          <a
+            href={`/corphy-page/blog/tags/${tag.toLowerCase()}/`}
+            class="blog-post-tag"
+          >
+            {tag}
+          </a>
+        ))}
+      </div>
+    )}
+  </div>
+  <Content />
+</BlogPostLayout>
