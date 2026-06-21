@@ -1,0 +1,128 @@
+---
+title: "Setting Up Strict Linting with Biome.js"
+description: "How to configure Biome.js for a TypeScript + Astro project — strict rules, CI integration, pre-commit hooks, and VS Code setup."
+date: 2026-06-21
+tags: ["biome", "tooling", "typescript", "astro", "tutorial"]
+draft: true
+---
+
+## Why Biome?
+
+[Biome.js](https://biomejs.dev) is the modern alternative to ESLint + Prettier. It's:
+
+- **Fast** — written in Rust, checks files in milliseconds
+- **Unified** — one tool for both linting and formatting
+- **Batteries included** — sensible defaults, minimal config needed
+
+Here's how I set it up for this Astro blog.
+
+## Installation
+
+```bash
+bun add -d @biomejs/biome
+```
+
+## Configuration
+
+My `biome.json` for a strict TypeScript + Astro setup:
+
+```json
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "linter": {
+    "rules": {
+      "preset": "recommended",
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    }
+  }
+}
+```
+
+## Astro-specific overrides
+
+Biome doesn't understand Astro's template syntax, so `noUnusedImports` and `noUnusedVariables` fire false positives. Fix with overrides:
+
+```json
+{
+  "overrides": [
+    {
+      "includes": ["**/*.astro"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedImports": "off",
+            "noUnusedVariables": "off"
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+## Pre-commit hooks with Husky
+
+```bash
+bun add -d husky lint-staged
+bunx husky init
+```
+
+Then `.husky/pre-commit`:
+
+```bash
+bunx lint-staged
+```
+
+And in `package.json`:
+
+```json
+{
+  "lint-staged": {
+    "*.{js,ts,mjs,cjs}": ["biome check --write"],
+    "*.{astro,css,json,md}": ["biome format --write"]
+  }
+}
+```
+
+## CI Workflow
+
+A dedicated `biome.yml` workflow catches violations before they reach production:
+
+```yaml
+name: Biome Check
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  biome:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx @biomejs/biome ci src/
+```
+
+## Conclusion
+
+Biome.js gives you ESLint + Prettier in one fast Rust binary. Combined with Husky for pre-commit hooks and GitHub Actions for CI, you get a rock-solid code quality pipeline with minimal configuration.
+
+> **Note:** This post is a draft — check back soon for the final version! 🦞

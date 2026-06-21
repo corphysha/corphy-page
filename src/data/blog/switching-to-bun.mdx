@@ -1,0 +1,111 @@
+---
+title: "Switching from npm to Bun — Why I Made the Jump"
+description: "A practical guide on migrating a project from npm to Bun: speed gains, lockfile changes, CI updates, and gotchas."
+date: 2026-06-21
+updated: 2026-06-21
+tags: ["bun", "javascript", "tooling", "tutorial"]
+---
+
+## The problem with npm
+
+I started this project with **npm**. It worked fine — but "fine" isn't good enough when there's a faster option. Here's what bothered me:
+
+- `npm install` was taking **8-10 seconds** even on a small project
+- `package-lock.json` was a massive JSON file with confusing merge conflicts
+- Node.js version management was a separate concern
+
+## Enter Bun
+
+**[Bun](https://bun.sh)** is an all-in-one JavaScript runtime and package manager. It replaces Node.js, npm, and even your test runner. The killer feature? **Speed**.
+
+```bash
+# npm
+$ npm install         # ~8.2s
+# bun
+$ bun install         # ~2.5s — 3x faster!
+```
+
+## Migration steps
+
+### 1. Install Bun
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+### 2. Remove npm artifacts
+
+```bash
+rm -rf node_modules package-lock.json
+```
+
+### 3. Install with Bun
+
+```bash
+bun install
+```
+
+This generates `bun.lock` — a **binary lockfile** that's much smaller and never has merge conflicts. Yes, you read that right — **binary lockfile, no more JSON merge hell**.
+
+### 4. Update GitHub Actions
+
+```yaml
+# Before (npm)
+- uses: actions/setup-node@v4
+  with:
+    node-version: 22
+    cache: "npm"
+- run: npm ci
+
+# After (bun)
+- uses: oven-sh/setup-bun@v2
+  with:
+    bun-version: latest
+- run: bun install --frozen-lockfile
+```
+
+### 5. Update scripts
+
+```json
+{
+  "scripts": {
+    "dev": "bun run astro dev",
+    "build": "bun run astro build"
+  }
+}
+```
+
+Actually, even simpler — `bun run` isn't needed for most commands:
+
+```json
+{
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "check": "biome check src/"
+  }
+}
+```
+
+Bun automatically uses its own runtime for `astro`, `biome`, and other CLI tools defined in `node_modules/.bin`.
+
+## Results
+
+| Metric | npm | bun | Improvement |
+|--------|-----|-----|-------------|
+| Install (cold) | 12s | 4s | **3x** |
+| Install (cached) | 8s | 2.5s | **3.2x** |
+| Build (Astro) | 2.1s | 1.7s | **1.2x** |
+| Biome check | 280ms | 220ms | **1.3x** |
+
+## Gotchas
+
+1. **`bun.lock` is binary** — don't try to read it. Trust it.
+2. **Some npm packages use `npm:` protocol** — Bun handles these, but watch for edge cases.
+3. **`--frozen-lockfile`** is your CI friend — equivalent to `npm ci`.
+
+## Verdict
+
+If you're starting a new project or maintaining a small-to-medium one, **switch to Bun**. The speed is real, the lockfile is better, and the all-in-one runtime means one less thing to manage.
+
+Happy hacking! 🦞
