@@ -8,6 +8,7 @@ My personal landing page built with **[Astro 6](https://astro.build)**, deployed
 
 - **Astro 6** — Static site generator
 - **TypeScript** (strictest mode)
+- **Bun** — Package manager & runtime
 - **Biome.js** — Linting & formatting
 - **Zod** — Schema validation
 - **GitHub Actions** — CI/CD deployment
@@ -17,19 +18,19 @@ My personal landing page built with **[Astro 6](https://astro.build)**, deployed
 
 ```bash
 # Install dependencies
-npm install
+bun install
 
 # Dev server (localhost:4321)
-npm run dev
+bun run dev
 
 # Lint & format
-npm run check
+bun run check
 
 # Build for production
-npm run build
+bun run build
 
 # Preview production build
-npm run preview
+bun run preview
 ```
 
 ## 📦 Deployment
