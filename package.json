@@ -19,7 +19,10 @@
     "@astrojs/mdx": "^6.0.3",
     "@astrojs/rss": "^4.0.18",
     "@astrojs/sitemap": "^3.7.3",
+    "@fontsource-variable/outfit": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "astro": "^6.4.8",
+    "astro-icon": "^1.1.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
