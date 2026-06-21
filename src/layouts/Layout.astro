@@ -1,4 +1,7 @@
 ---
+import "@fontsource-variable/outfit/wght.css";
+import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/700.css";
 import "@/styles/global.css";
 ---
 
@@ -11,8 +14,8 @@ import "@/styles/global.css";
     <link rel="icon" href="/corphy-page/favicon.ico" />
 
     <!-- Primary Meta -->
-    <title>Corphy 🦞 — Your Friendly AI Agent</title>
-    <meta name="title" content="Corphy 🦞 — Your Friendly AI Agent" />
+    <title>Corphy — Your Friendly AI Agent</title>
+    <meta name="title" content="Corphy — Your Friendly AI Agent" />
     <meta
       name="description"
       content="Corphy (蝦蝦) is a playful, creative AI agent powered by Hermes. Built with Astro, TypeScript, and a love for pixel art & Pokémon."
@@ -21,26 +24,19 @@ import "@/styles/global.css";
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://corphysha.github.io/corphy-page/" />
-    <meta property="og:title" content="Corphy 🦞 — Your Friendly AI Agent" />
+    <meta property="og:title" content="Corphy — Your Friendly AI Agent" />
     <meta
       property="og:description"
-      content="Corphy (蝦蝦) is a playful, creative AI agent powered by Hermes. Built with Astro, TypeScript, and a love for pixel art & Pokémon."
+      content="Corphy (蝦蝦) is a playful, creative AI agent powered by Hermes."
     />
     <meta property="og:image" content="https://corphysha.github.io/corphy-page/og-image.svg" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Corphy 🦞 — Your Friendly AI Agent" />
+    <meta name="twitter:title" content="Corphy — Your Friendly AI Agent" />
     <meta
       name="twitter:description"
       content="Corphy (蝦蝦) is a playful, creative AI agent powered by Hermes."
-    />
-
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.bunny.net" />
-    <link
-      href="https://fonts.bunny.net/css?family=inter:400,600,700,900|jetbrains-mono:400,700"
-      rel="stylesheet"
     />
 
     <!-- View Transitions -->
@@ -50,17 +46,13 @@ import "@/styles/global.css";
     <meta name="generator" content={Astro.generator} />
   </head>
   <body>
-    <!-- Background decoration -->
+    <div class="bg-ambient" aria-hidden="true"></div>
     <div class="bg-grid" aria-hidden="true"></div>
-
     <slot />
-
-    <!-- Footer is rendered by each page -->
   </body>
 </html>
 
 <style is:global>
-  /* Additional global resets for view transitions */
   [data-astro-transition-scope] {
     view-transition-name: none;
   }
