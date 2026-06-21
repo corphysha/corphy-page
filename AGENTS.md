@@ -19,6 +19,9 @@ Static site built with Astro, deployed to GitHub Pages.
 | Bun | ^1.3 | Package manager & runtime |
 | Biome.js | ^2.5 | Linting & formatting |
 | Zod | ^4.4 | Schema validation |
+| @astrojs/mdx | ^6.0.3 | MDX support for blog posts |
+| @astrojs/rss | ^4.0.18 | RSS feed generation |
+| @astrojs/sitemap | ^3.7.3 | Automatic sitemap.xml |
 | Husky | ^9.1 | Git hooks |
 | lint-staged | ^17.0 | Pre-commit checks |
 
@@ -62,19 +65,30 @@ bun run format       # Format only
 ```
 corphy-page/
 ├── src/
-│   ├── pages/index.astro      # Main landing page (all sections)
-│   ├── layouts/Layout.astro    # HTML shell + meta tags
-│   ├── styles/global.css       # Design system + animations
-│   ├── content.config.ts       # Zod content schemas
-│   └── assets/                 # Static assets
-├── public/                     # Public files (favicon, OG image)
+│   ├── pages/
+│   │   ├── index.astro              # Main landing page + latest posts
+│   │   ├── blog/
+│   │   │   ├── index.astro          # Blog index with reading time & tags
+│   │   │   ├── [...slug].astro       # Individual blog post (MDX)
+│   │   │   └── tags/[tag].astro     # Tag-filtered listing
+│   │   └── rss.xml.ts               # RSS feed endpoint
+│   ├── layouts/
+│   │   ├── Layout.astro             # HTML shell + meta tags
+│   │   └── BlogPostLayout.astro     # Blog post wrapper
+│   ├── styles/
+│   │   ├── global.css               # Design system + animations
+│   │   └── blog.css                 # Blog-specific styles (cards, code blocks)
+│   ├── data/blog/                   # Blog posts (MDX with frontmatter)
+│   ├── content.config.ts            # Zod schemas + glob() loader
+│   └── assets/                      # Static assets
+├── public/                          # Public files (favicon, OG image)
 ├── .github/workflows/
-│   ├── deploy.yml              # Build + deploy to GitHub Pages
-│   └── biome.yml               # Strict Biome CI check
-├── astro.config.mjs            # Astro config (site, base, build)
-├── biome.json                  # Biome config
-├── tsconfig.json               # TypeScript config
-└── package.json                # Dependencies + scripts
+│   ├── deploy.yml                   # Build + deploy to GitHub Pages
+│   └── biome.yml                    # Strict Biome CI check
+├── astro.config.mjs                 # Astro config (integrations, Shiki, sitemap)
+├── biome.json                       # Biome config
+├── tsconfig.json                    # TypeScript config (strictest)
+└── package.json                     # Dependencies + scripts
 ```
 
 ## CI/CD
