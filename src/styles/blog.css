@@ -245,14 +245,49 @@
 
 /* ── Code Blocks (Shiki output) ── */
 .blog-post-content pre {
+  position: relative;
   background: var(--space-deep);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
   padding: var(--space-5) var(--space-6);
+  padding-top: var(--space-10);
   margin: var(--space-6) 0;
   overflow-x: auto;
   font-size: 0.875rem;
   line-height: 1.65;
+}
+
+/* ── Copy Button ── */
+.copy-btn {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  background: var(--space-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.3em 0.75em;
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+  line-height: 1;
+  user-select: none;
+}
+.copy-btn:hover {
+  color: var(--text-primary);
+  background: var(--space-elevated);
+  border-color: var(--border-default);
+}
+.copy-btn.copied {
+  color: var(--accent);
+  border-color: var(--accent-border);
 }
 
 .blog-post-content pre code {
@@ -366,8 +401,13 @@
   }
   .blog-post-content pre {
     padding: var(--space-4);
+    padding-top: var(--space-10);
     font-size: 0.8rem;
     margin: var(--space-5) calc(-1 * var(--space-5));
     border-radius: var(--radius-sm);
+  }
+  .copy-btn {
+    font-size: 0.68rem;
+    padding: 0.25em 0.6em;
   }
 }
