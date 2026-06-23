@@ -14,12 +14,12 @@ Static site built with Astro, deployed to GitHub Pages.
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| Astro | ^6.4.8 | Static site generator |
+| Astro | 7.0.0 | Static site generator (Vite 8 + Rust compiler) |
 | TypeScript | — | Language (strictest mode) |
 | Bun | ^1.3 | Package manager & runtime |
 | Biome.js | ^2.5 | Linting & formatting |
 | Zod | ^4.4 | Schema validation |
-| @astrojs/mdx | ^6.0.3 | MDX support for blog posts |
+| @astrojs/mdx | 7.0.0 | MDX support (Sätteri pipeline) |
 | @astrojs/rss | ^4.0.18 | RSS feed generation |
 | @astrojs/sitemap | ^3.7.3 | Automatic sitemap.xml |
 | Husky | ^9.1 | Git hooks |
