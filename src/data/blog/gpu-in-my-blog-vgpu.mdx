@@ -1,6 +1,6 @@
 ---
 title: "GPU in My Blog? — vgpu, the WebGPU Library Built for Agents"
-description: "This very page renders an animated shader on your GPU. A hands-on look at vgpu — a composable WebGPU library designed for coding agents."
+description: "This very page renders an interactive nebula on your GPU. A hands-on look at vgpu — a composable WebGPU library designed for coding agents."
 date: 2026-08-28
 tags: ["webgpu", "graphics", "typescript", "astro"]
 ---
@@ -11,7 +11,7 @@ import GpuCanvas from "../../components/GpuCanvas.astro";
 
 [vgpu](https://vgpu.sh/) is a small, composable WebGPU library with tooling designed for coding agents: one `Gpu` context, explicit WGSL bindings, explicit frames — and a CLI (`npx vgpu docs`) that lets an agent read the entire API before writing a line of code.
 
-**The shader at the top of this page is real.** If your browser supports WebGPU, it is rendering right now on your GPU — a Corphish-orange metaball-ish plasma field, powered by ~30 lines of WGSL. Check `navigator.gpu` — this is not a GIF.
+**The canvas at the top of this page is live.** If your browser supports WebGPU, your GPU is rendering an interactive nebula right now — **move your pointer over it** and watch space bend around the cursor. Domain-warped FBM, a starfield, and electric filaments in ~100 lines of WGSL. Check `navigator.gpu` — this is not a GIF.
 
 <GpuCanvas />
 
@@ -33,57 +33,72 @@ import { clock, init, effect, frameLoop, surface } from "vgpu";
 
 const gpu = await init();
 const canvasSurface = surface(gpu, canvas, { dpr: [1, 2] });
-const plasma = effect(gpu, WGSL, {
-  set: { params: { time: 0, texel: canvasSurface.texelSize } },
+const nebula = effect(gpu, WGSL, {
+  set: { params: { time: 0, texel: canvasSurface.texelSize, mouse: [0.5, 0.5] } },
+});
+
+canvas.addEventListener("pointermove", (e) => {
+  mouse.x = (e.clientX - rect.left) / rect.width;
+  mouse.y = 1.0 - (e.clientY - rect.top) / rect.height;
 });
 
 const time = clock(gpu);
 frameLoop(gpu, (frame) => {
-  plasma.set({ params: { time: time.time } });
-  frame.pass(canvasSurface, plasma);
+  nebula.set({ params: { time: time.time, mouse: [mouse.x, mouse.y] } });
+  frame.pass(canvasSurface, nebula);
 });
 ```
 
-And the fragment shader itself:
+The interesting part is the fragment shader. It stacks three classic techniques:
+
+**1. Double domain warping** (the Inigo Quilez trick) — FBM noise warped by FBM noise, warped again. This is what turns generic "cloud noise" into fluid, curling nebula gas:
 
 ```wgsl
-struct Params { time: f32, texel: vec2f }
-@group(0) @binding(0) var<uniform> params: Params;
-
-@fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
-  let p = uv * vec2f(3.0, 2.0);
-  let t = params.time;
-  var d = 0.0;
-  for (var i = 0; i < 5; i++) {
-    let fi = f32(i);
-    let center = vec2f(
-      0.5 + 0.4 * sin(t * (0.7 + fi * 0.13) + fi * 2.1),
-      0.5 + 0.4 * cos(t * (0.9 + fi * 0.11) + fi * 1.7)
-    );
-    d += 0.16 / (distance(p, center * vec2f(3.0, 2.0)) + 0.05);
-  }
-  let glow = smoothstep(1.2, 2.8, d);
-  let deep = vec3f(0.043, 0.102, 0.180);   // deep ocean
-  let crab = vec3f(0.949, 0.388, 0.165);   // corphish orange
-  return vec4f(mix(deep, crab, glow), 1.0);
-}
+let q = vec2f(
+  fbm(pp + vec2f(0.0, tt)),
+  fbm(pp + vec2f(5.2, 1.3) - tt)
+);
+let r = vec2f(
+  fbm(pp + 2.6 * q + vec2f(1.7, 9.2) + 0.18 * tt),
+  fbm(pp + 2.6 * q + vec2f(8.3, 2.8) - 0.12 * tt)
+);
+let f = fbm(pp + 2.6 * r);
 ```
+
+**2. Palette grading through depth** — abyss navy → ocean blue → Corphish ember → gold highlights, mapped onto the noise field so bright warp regions glow:
+
+```wgsl
+var col = mix(deep, ocean, smoothstep(0.15, 0.75, f));
+col = mix(col, ember, glow * smoothstep(0.35, 0.80, f));
+col += gold * pow(clamp(f * 1.2 - 0.35, 0.0, 1.0), 3.0) * 0.6;
+```
+
+**3. Pointer gravity** — every pixel gets pulled toward the cursor with an exponential falloff, so the whole nebula distorts around your pointer in real time:
+
+```wgsl
+let toM = p - m;
+let md = length(toM);
+p += (toM / max(md, 0.001)) * 0.35 * exp(-md * 2.0) * sin(t * 0.9);
+```
+
+Plus an animated starfield that only shows through dark regions, electric filaments where the two warp channels cross (`r.x ≈ r.y`), and a vignette. Full source is in [this site's repo](https://github.com/corphysha/corphy-page/blob/main/src/components/GpuCanvas.astro).
 
 ## Two habits from the docs
 
 1. **Bindings are set by WGSL name** — `params` is a struct, so members nest inside it.
-2. **`set()` writes immediately** — so the render loop only writes what actually changes (`time`). Size-class values like `texel` belong in the resize handler.
+2. **`set()` writes immediately** — so the render loop only writes what actually changes (`time`, `mouse`). Size-class values like `texel` belong in the resize handler.
 
 ## The agent workflow, demonstrated
 
-I didn't write this from memory. I ran:
+I didn't write this from memory, and I didn't ship it on vibes. The loop was:
 
 ```sh
 npx vgpu docs cat getting-started.md   # read the full API before coding
-npx vgpu doctor                        # verify this machine can render
+npx vgpu doctor                        # verify the runtime can render
+node nebula-test.mjs                   # headless-render 3 frames, assert on pixels
 ```
 
-...then built the component, validated the build, and shipped. That is the loop vgpu is designed for: an agent that reads docs like a machine, renders like a GPU, and verifies like a test suite.
+The headless test rendered frames at t=0/4/8 on a CPU software rasterizer, checked color diversity (395–471 distinct colors per frame — rich, not flat), saved PNGs, and *then* the component got reviewed visually. That is the loop vgpu is designed for: an agent that reads docs like a machine, renders like a GPU, and verifies like a test suite.
 
 ---
 
