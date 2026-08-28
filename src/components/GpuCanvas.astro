@@ -1,0 +1,112 @@
+---
+/**
+ * Live WebGPU canvas powered by vgpu — renders an animated fragment shader.
+ * Gracefully falls back to a static message when WebGPU is unavailable.
+ */
+const fallback =
+  "Your browser doesn't support WebGPU — but the code above is what your GPU would be running.";
+---
+
+<canvas
+  id="vgpu-demo"
+  class="vgpu-canvas"
+  width="800"
+  height="450"
+  aria-label="Live WebGPU shader demo: animated Corphish-orange plasma"
+>
+</canvas>
+<p class="vgpu-fallback" data-vgpu-fallback hidden>{fallback}</p>
+
+<style>
+  .vgpu-canvas {
+    display: block;
+    width: 100%;
+    max-width: 860px;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    margin: 1.5rem 0;
+    border-radius: var(--radius-lg, 16px);
+    border: 1px solid color-mix(in srgb, var(--accent, #f2632a) 35%, transparent);
+    background:
+      radial-gradient(ellipse at 30% 40%, #1a2e50 0%, transparent 60%),
+      linear-gradient(135deg, #0b1220 0%, #142844 100%);
+    box-shadow: 0 8px 32px rgb(0 0 0 / 0.35);
+  }
+
+  .vgpu-fallback {
+    margin: -0.75rem 0 1.5rem;
+    font-size: 0.875rem;
+    color: var(--text-muted, #94a3b8);
+    font-style: italic;
+  }
+</style>
+
+<script>
+  import { clock, init, effect, frameLoop, surface } from "vgpu";
+
+  const WGSL = /* wgsl */ `
+  struct Params { time: f32, texel: vec2f }
+  @group(0) @binding(0) var<uniform> params: Params;
+
+  @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
+    let p = uv * vec2f(3.0, 2.0);
+    let t = params.time;
+    var d = 0.0;
+    for (var i = 0; i < 5; i++) {
+      let fi = f32(i);
+      let center = vec2f(
+        0.5 + 0.4 * sin(t * (0.7 + fi * 0.13) + fi * 2.1),
+        0.5 + 0.4 * cos(t * (0.9 + fi * 0.11) + fi * 1.7)
+      );
+      d += 0.16 / (distance(p, center * vec2f(3.0, 2.0)) + 0.05);
+    }
+    let glow = smoothstep(1.2, 2.8, d);
+    let deep = vec3f(0.043, 0.102, 0.180);
+    let crab = vec3f(0.949, 0.388, 0.165);
+    return vec4f(mix(deep, crab, glow), 1.0);
+  }`;
+
+  type VGPU = Awaited<ReturnType<typeof init>>;
+
+  async function boot(canvas: HTMLCanvasElement): Promise<void> {
+    const gpu: VGPU = await init();
+    const canvasSurface = surface(gpu, canvas, { dpr: [1, 2] });
+    const plasma = effect(gpu, WGSL, {
+      set: { params: { time: 0, texel: canvasSurface.texelSize } },
+    });
+
+    canvasSurface.onResize(() => {
+      plasma.set({ params: { texel: canvasSurface.texelSize } });
+    });
+
+    const time = clock(gpu);
+    frameLoop(gpu, (frame) => {
+      plasma.set({ params: { time: time.time } });
+      frame.pass(canvasSurface, plasma);
+    });
+  }
+
+  function setup(): void {
+    const canvas = document.getElementById("vgpu-demo") as HTMLCanvasElement | null;
+    const fallbackEl = document.querySelector<HTMLElement>("[data-vgpu-fallback]");
+    if (!canvas) return;
+
+    const supported =
+      typeof navigator !== "undefined" && "gpu" in navigator && navigator.gpu !== null;
+
+    if (!supported) {
+      canvas.hidden = true;
+      fallbackEl?.removeAttribute("hidden");
+      return;
+    }
+
+    boot(canvas).catch(() => {
+      canvas.hidden = true;
+      fallbackEl?.removeAttribute("hidden");
+    });
+  }
+
+  // Run on initial load and after Astro View Transitions swap.
+  document.addEventListener("DOMContentLoaded", setup);
+  document.addEventListener("astro:after-swap", setup);
+</script>
