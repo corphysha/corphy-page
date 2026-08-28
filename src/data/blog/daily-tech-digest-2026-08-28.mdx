@@ -70,13 +70,68 @@ Node.js 於 8/26 協調發布 Current 與 LTS 兩條線。Node 26.8.0 帶來 zli
 
 這五項最佳化值得逐一拆解，因為每一項都是 Rust 資料結構設計的直接教材。
 
-**`Vec`/`String` 改 `Box<[T]>`/`Box<str>`。** 快取條目存入後不可變，`Vec` 為未來增長預留的 capacity 完全浪費。8 個欄位各省 8 bytes（指標+長度+容量變成指標+長度），合計每筆省 64 bytes，2,500 億筆即超過 15TB。
+**`Vec`/`String` 改 `Box<[T]>`/`Box<str>`。** 快取條目存入後不可變，`Vec` 為未來增長預留的 capacity 完全浪費。兩者在 64-bit 平台上的記憶體佈局差異：
 
-**Section 合併。** DNS 回應的 answer、authority、additional 三個 section 原本各自為 list；合併成單一 list 後用兩個 `u16` offset 標記邊界，取代每個 list 8-byte 指標加 8-byte 長度，每筆省 28 bytes。
+```rust
+// 改前：Vec<String> — 每個欄位 24 bytes（ptr + len + capacity）
+struct EntryBefore {
+    domains: Vec<String>,   // 24 bytes + heap
+    // ... 其餘欄位
+}
 
-**Enum boxing。** Rust enum 的大小等於最大 variant。小小的 A record（4 bytes）被迫佔用 NAPTR 級距的 144 bytes。將大 variant 移到 heap 後，A/AAAA 每筆省 120 bytes（兩者占流量 80% 以上）；代價是 NAPTR 等罕見記錄反而多付一次 heap 配置，屬於划算的 trade-off。
+// 改後：Box<[Box<str>]> — 每個欄位 16 bytes（ptr + len），capacity 歸零
+struct EntryAfter {
+    domains: Box<[Box<str>]>,   // 16 bytes + heap
+    // ... 其餘欄位
+}
+```
 
-**Raw wire-format 儲存。** 記錄資料直接以 DNS wire format bytes 存進單一 `Box<[u8]>`（2-byte 長度前綴加原始 bytes），回應時 A/AAAA/TXT/DNSSEC 可直接複製、跳過逐欄位重新序列化，僅含 domain name 的 CNAME/NS/MX/SOA 仍需解析以套用 name compression。此步驟讓查詢延遲再降 5%。
+8 個欄位各省 8 bytes，合計每筆省 64 bytes，2,500 億筆即超過 15TB。
+
+**Section 合併。** DNS 回應的 answer、authority、additional 三個 section 原本各自為 list；合併成單一 list 後用兩個 `u16` offset 標記邊界：
+
+```rust
+// 改前：三個獨立 Vec，各付 24 bytes 的 (ptr, len, capacity)
+sections: (Vec<Record>, Vec<Record>, Vec<Record>)   // 72 bytes
+
+// 改後：單一 Vec + 兩個 u16 邊界，共 20 bytes
+struct Sections {
+    records: Vec<Record>,      // 24 bytes（唯一一份）
+    authority_end: u16,        // 2 bytes — answer 區結束位置
+    additional_end: u16,       // 2 bytes — authority 區結束位置
+}
+```
+
+每筆省 28 bytes（72 減去 24 加 4，再算上 Vec 本身的縮減）。
+
+**Enum boxing。** Rust enum 的大小等於最大 variant。小小的 A record（4 bytes）被迫佔用 NAPTR 級距的 144 bytes：
+
+```rust
+// 改前：enum 大小 = 最大 variant，所有記錄都付 144 bytes
+enum RDataBefore {
+    A([u8; 4]),        // 4 bytes
+    Naptr(NaptrData),  // 144 bytes → enum 大小被撐到 ~144 bytes
+}
+
+// 改後：大 variant 移到 heap，enum 本體只剩指標級大小
+enum RDataAfter {
+    A([u8; 4]),             // 直接內聯，零額外成本
+    Naptr(Box<NaptrData>),  // 8 bytes 指標，實體在 heap
+}
+```
+
+A/AAAA 每筆省 120 bytes（兩者占流量 80% 以上）；代價是 NAPTR 等罕見記錄反而多付一次 heap 配置，屬於划算的 trade-off。
+
+**Raw wire-format 儲存。** 記錄資料直接以 DNS wire format bytes 存進單一 `Box<[u8]>`（2-byte 長度前綴加原始 bytes）：
+
+```rust
+// heap 中的實際佈局：
+// [len_hi, len_lo, <原始 DNS wire bytes...>]
+// 回應時 A/AAAA/TXT/DNSSEC 可直接把這段 bytes 複製進回應封包，
+// 跳過逐欄位重新序列化。
+```
+
+僅含 domain name 的 CNAME/NS/MX/SOA 仍需解析，以套用 name compression。此步驟讓查詢延遲再降 5%。
 
 **Scratchspace buffer。** 用跨插入重複使用的暫存 buffer 建構資料，完成後一次性 `memcpy` 進單一配置，取代每筆記錄各自的 heap 配置，插入吞吐量因此提升 13%。
 
