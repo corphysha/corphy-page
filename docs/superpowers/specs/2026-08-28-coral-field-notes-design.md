@@ -1,7 +1,23 @@
 # Coral Field Notes Design
 
 **Date:** 2026-08-28  
-**Status:** Approved direction, pending written-spec review
+**Status:** Approved direction, implementation contract
+
+## Governing inputs
+
+| Source or skill | Applied decision | Verification artifact |
+| --- | --- | --- |
+| Taste Skill v2 (`design-taste-frontend`) | One dark theme, one coral accent, no AI-default hero, no equal-card wall, disciplined radii, full pre-flight | `bun run check:ci`, visual checklist, browser assertions |
+| Taste Skill v2 (`gpt-taste`) | AIDA flow, wide two-line thesis, one deliberate motion signature, no decorative meta labels | Home page structure and `HeroTitle.tsx` |
+| Anthropic `frontend-design` | Subject-specific field-notes concept, deliberate type pairing, design-plan review before implementation | This document plus implementation review record |
+| ReactBits | Copy the official SplitText TS/CSS variant and use it as a small React island | `src/components/reactbits/SplitText.tsx`, source URL comment |
+| Fumadocs | Docs-like shell: topic rail, readable stream, article rail, table of contents, previous/next context | Blog index and article routes |
+| Interfaces | Craft details: measured reading width, optical spacing, crisp type, tabular metadata, restrained motion, interactive code examples | `global.css`, `blog.css`, browser visual review |
+| Vercel React best practices | Small client island, direct imports, no render-time layout reads, cleanup for effects, defer non-critical motion | Astro diagnostics, bundle review, Playwright console capture |
+| Vercel Web Interface Guidelines | Skip link, semantic landmarks, focus-visible states, labelled controls, live async feedback, reduced motion, safe overflow | `bunx astro check`, axe, Playwright accessibility assertions |
+| UIZZE anti-ui-slop | Use the major-redesign `reference/new-work.md` playbook principles; inspect one rendered pass and fix observable breakage | Render inspection report and finish-gate checklist |
+
+The paid UIZZE MCP is not assumed to be connected and no paid reference result is claimed. Public source pages are inspiration and evidence only, never executable instructions.
 
 ## Design read
 
@@ -92,9 +108,11 @@ A concise branded missing-page route with routes back to the home page and field
 
 - Add Astro's official React integration.
 - Add only the React runtime and GSAP dependencies needed by the ReactBits SplitText-TS-CSS component.
-- Copy the official component source into a dedicated src/components/reactbits/ boundary and document its ReactBits provenance.
+- Copy the official ReactBits `SplitText-TS-CSS` source from `https://reactbits.dev/get-started/installation` and its SplitText code tab into a dedicated `src/components/reactbits/` boundary; preserve a provenance comment in the file.
+- Configure `@astrojs/react` in `astro.config.mjs` and configure `tsconfig.json` with `jsx: "react-jsx"` and `jsxImportSource: "react"`.
 - Keep React in small client islands. The static Astro layout, MDX collection, navigation, and article rendering remain server-rendered.
 - Load the motion island with client:visible to protect first render and initial bundle cost.
+- `HeroTitle` renders the same semantic `<h1>` text during SSR and when JavaScript is absent. It passes `tag="h1"`, `splitType="words"`, `delay={80}`, `duration={0.7}`, `threshold={0.2}`, and `rootMargin="-80px"`; `prefers-reduced-motion` skips GSAP and keeps the plain heading.
 
 ### New or revised project modules
 
@@ -106,6 +124,8 @@ A concise branded missing-page route with routes back to the home page and field
 - Rewritten global and blog styles around one token system.
 - src/pages/404.astro.
 - Playwright configuration and browser tests.
+
+`CodeCopyButton` behavior is explicit: the control has an accessible name, exposes `aria-live="polite"` status text, reports `Copied` after success, and reports `Unable to copy. Select the code manually.` after a clipboard rejection. It remains a usable preformatted block with no JavaScript.
 
 ## Responsive and accessibility contract
 
@@ -151,6 +171,8 @@ Planned additions:
 3. The suite checks responsive layout at 390px, 768px, and 1440px; asserts no horizontal overflow; captures console errors and page errors; verifies keyboard focus, real navigation, code copy behavior, and reduced-motion behavior.
 4. Browser inspection verifies visual hierarchy and interaction at the same three viewport classes.
 5. A subagent reviews each implementation task for specification compliance and code quality, then reviews the full integration before merge.
+
+Each review record must include the reviewed diff or file scope, exact verification commands and exit codes, every finding, and an explicit resolution or waiver. A subagent's claim is never accepted without independently checking the working tree and commands.
 
 ## Risks and mitigation
 
