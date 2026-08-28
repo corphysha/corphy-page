@@ -13,6 +13,12 @@
     return true;
   }
 
+  const copyIcon =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+
+  const checkIcon =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="20 6 9 17 4 12"/></svg>';
+
   function initCodeCopyButtons() {
     document.querySelectorAll<HTMLElement>(".article-content pre").forEach((pre) => {
       if (pre.dataset.copyReady === "true") return;
@@ -25,8 +31,9 @@
       const button = document.createElement("button");
       button.type = "button";
       button.className = "code-copy-button";
-      button.textContent = "Copy";
+      button.innerHTML = copyIcon;
       button.setAttribute("aria-label", "Copy code");
+      button.title = "Copy code";
       button.dataset.codeCopy = "true";
 
       button.addEventListener("click", async () => {
@@ -35,13 +42,17 @@
 
           if (!copied) throw new Error("The browser rejected the copy command.");
 
-          button.textContent = "Copied";
+          button.classList.add("is-copied");
+          button.innerHTML = checkIcon;
           button.setAttribute("aria-label", "Copied");
+          button.title = "Copied";
           announce("Copied");
 
           window.setTimeout(() => {
-            button.textContent = "Copy";
+            button.classList.remove("is-copied");
+            button.innerHTML = copyIcon;
             button.setAttribute("aria-label", "Copy code");
+            button.title = "Copy code";
           }, 1800);
         } catch {
           announce("Unable to copy. Select the code manually.");

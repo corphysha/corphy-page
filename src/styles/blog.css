@@ -286,17 +286,18 @@
 
 .code-copy-button {
   position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  min-width: 4.25rem;
-  min-height: 2.35rem;
+  top: 0.6rem;
+  right: 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  padding: 0;
   border: 0.0625rem solid var(--border-strong);
   border-radius: var(--radius-small);
   background: var(--graphite-raised);
-  color: var(--mist);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 650;
+  color: var(--ash);
   transition:
     background-color 160ms ease,
     border-color 160ms ease,
@@ -304,10 +305,27 @@
     transform 160ms ease;
 }
 
+.code-copy-button svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: none;
+}
+
 .code-copy-button:hover {
   border-color: var(--coral);
   background: rgb(255 107 61 / 0.15);
   color: var(--mist);
+}
+
+.code-copy-button:focus-visible {
+  border-color: var(--coral);
+  color: var(--mist);
+}
+
+.code-copy-button.is-copied {
+  border-color: var(--coral);
+  background: rgb(255 107 61 / 0.15);
+  color: var(--coral);
 }
 
 .code-copy-button:active {
