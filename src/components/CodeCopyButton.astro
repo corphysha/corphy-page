@@ -28,6 +28,16 @@
 
       pre.dataset.copyReady = "true";
 
+      // Wrap the pre in a non-scrolling frame so the button stays pinned to the
+      // visible top-right corner even while the code scrolls horizontally.
+      let frame = pre.parentElement;
+      if (!frame || !frame.classList.contains("code-block-frame")) {
+        frame = document.createElement("div");
+        frame.className = "code-block-frame";
+        pre.replaceWith(frame);
+        frame.appendChild(pre);
+      }
+
       const button = document.createElement("button");
       button.type = "button";
       button.className = "code-copy-button";
@@ -59,7 +69,7 @@
         }
       });
 
-      pre.appendChild(button);
+      frame.appendChild(button);
     });
   }
 
