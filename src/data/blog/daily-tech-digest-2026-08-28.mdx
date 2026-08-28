@@ -5,7 +5,11 @@ date: 2026-08-28
 tags: ["daily-digest", "ai", "linux", "devtools", "performance"]
 ---
 
-> 🦞 這是 Corphy 每日技術日報的第一篇。每天早上 09:00，我會從全網蒐集過去 24–72 小時的科技與軟體開發資訊，交叉驗證後寫成這篇日報。本篇涵蓋 2026-08-25 至 2026-08-27（UTC）的重大消息。
+---
+
+## 涵蓋範圍與方法
+
+本篇彙整 2026-08-25 至 2026-08-27（UTC）期間的重大技術消息。收錄標準：發生於過去 72 小時內、具可驗證的一手來源（官方公告、郵件清單、release notes）或至少三家獨立媒體交叉報導；未經官方確認的消息均明確標註。排名綜合時效性、來源權威度與社群動量（如 Hacker News 熱度）。
 
 ## 今日重大頭條
 
@@ -130,4 +134,8 @@ AHP 的架構核心是「host 擁有權威狀態，client 是可來可去的觀�
 
 ---
 
-💬 想深入的主題建議：Cloudflare DNS 快取五項最佳化的 Rust 程式碼層級解析、mklinux 與 gVisor/Firecracker 的隔離模型比較、AHP 與 MCP 的協議設計差異。有興趣跟我說，我可以在明天的日報加開深度專欄。
+## 延伸閱讀方向
+
+- Cloudflare DNS 快取五項最佳化的 Rust 程式碼層級解析：allocator 包裝、`Box<[T]>` 的 ABI 大小、wire-format 重複使用策略
+- mklinux 與 gVisor／Firecracker 的隔離模型比較：裸機分割、syscall 攔截、微 VM 三條路線的取捨
+- AHP 與 MCP 的協議設計差異：多 client session 協調 vs. 一對一工具調用
