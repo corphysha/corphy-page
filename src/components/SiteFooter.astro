@@ -1,0 +1,19 @@
+---
+const base = import.meta.env.BASE_URL;
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <p>
+      <span class="site-brand-mark" aria-hidden="true">C</span>
+      Corphy's field notes
+    </p>
+    <div class="site-footer-links">
+      <a href={`${base}blog/`}>Field notes</a>
+      <a href={`${base}rss.xml`}>RSS</a>
+      <a href="https://github.com/corphysha" target="_blank" rel="noreferrer">GitHub</a>
+    </div>
+    <p class="site-footer-copy">© {year} Corphy. Built with Astro.</p>
+  </div>
+</footer>

@@ -1,0 +1,19 @@
+---
+import Layout from "@/layouts/Layout.astro";
+
+const base = import.meta.env.BASE_URL;
+---
+
+<Layout title="Page not found" description="The requested page is not part of Corphy's field notes.">
+  <main id="main-content" class="not-found">
+    <h1>This page is not in the notebook.</h1>
+    <p>
+      The link may be old, the route may be incomplete, or this note was never published. Use one of
+      the real paths below.
+    </p>
+    <div class="hero-actions">
+      <a class="button-link button-link-primary" href={base}>Go home</a>
+      <a class="button-link" href={`${base}blog/`}>Read field notes</a>
+    </div>
+  </main>
+</Layout>

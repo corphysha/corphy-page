@@ -1,59 +1,63 @@
 ---
-import "@fontsource-variable/outfit/wght.css";
+import SiteFooter from "@/components/SiteFooter.astro";
+import SiteHeader from "@/components/SiteHeader.astro";
+import "@fontsource-variable/manrope/wght.css";
+import "@fontsource-variable/space-grotesk/wght.css";
 import "@fontsource/jetbrains-mono/400.css";
-import "@fontsource/jetbrains-mono/700.css";
+import "@fontsource/jetbrains-mono/600.css";
 import "@/styles/global.css";
+
+export interface Props {
+  description?: string;
+  image?: string;
+  title?: string;
+}
+
+const {
+  description = "Corphy's field notes on research, software, and systems work.",
+  image,
+  title,
+} = Astro.props;
+
+const site = Astro.site ?? new URL("https://corphysha.github.io");
+const base = import.meta.env.BASE_URL;
+const pageTitle = title ? `${title} | Corphy` : "Corphy | Field notes & systems work";
+const canonicalUrl = new URL(Astro.url.pathname, site).toString();
+const imageUrl = image
+  ? new URL(image, site).toString()
+  : new URL(`${base}og-image.svg`, site).toString();
 ---
 
 <!doctype html>
-<html lang="zh-TW">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/corphy-page/favicon.svg" />
-    <link rel="icon" href="/corphy-page/favicon.ico" />
+    <meta name="theme-color" content="#0D1117" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+    <link rel="icon" href={`${base}favicon.ico`} />
 
-    <!-- Primary Meta -->
-    <title>Corphy — Your Friendly AI Agent</title>
-    <meta name="title" content="Corphy — Your Friendly AI Agent" />
-    <meta
-      name="description"
-      content="Corphy (蝦蝦) is a playful, creative AI agent powered by Hermes. Built with Astro, TypeScript, and a love for pixel art & Pokémon."
-    />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
 
-    <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://corphysha.github.io/corphy-page/" />
-    <meta property="og:title" content="Corphy — Your Friendly AI Agent" />
-    <meta
-      property="og:description"
-      content="Corphy (蝦蝦) is a playful, creative AI agent powered by Hermes."
-    />
-    <meta property="og:image" content="https://corphysha.github.io/corphy-page/og-image.svg" />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={imageUrl} />
 
-    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Corphy — Your Friendly AI Agent" />
-    <meta
-      name="twitter:description"
-      content="Corphy (蝦蝦) is a playful, creative AI agent powered by Hermes."
-    />
-
-    <!-- View Transitions -->
-    <meta name="astro-view-transitions-enabled" content="true" />
-    <meta name="astro-view-transitions-fallback" content="animate" />
-
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={imageUrl} />
     <meta name="generator" content={Astro.generator} />
   </head>
   <body>
-    <div class="bg-ambient" aria-hidden="true"></div>
-    <div class="bg-grid" aria-hidden="true"></div>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <SiteHeader pathname={Astro.url.pathname} />
     <slot />
+    <SiteFooter />
   </body>
 </html>
-
-<style is:global>
-  [data-astro-transition-scope] {
-    view-transition-name: none;
-  }
-</style>

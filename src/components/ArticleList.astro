@@ -1,0 +1,42 @@
+---
+import type { CollectionEntry } from "astro:content";
+import { formatPostDate, getReadingTime, toTagSlug } from "@/lib/blog";
+
+export interface Props {
+  posts: CollectionEntry<"blog">[];
+  featured?: boolean;
+}
+
+const { posts, featured = false } = Astro.props;
+const base = import.meta.env.BASE_URL;
+---
+
+<div class:list={["article-list", { "article-list-featured": featured }]}>
+  {
+    posts.map((post) => (
+      <article class="article-list-item">
+        <div class="article-list-meta">
+          <time datetime={post.data.date.toISOString()}>{formatPostDate(post.data.date)}</time>
+          <span>{getReadingTime(post)} min read</span>
+        </div>
+        <div class="article-list-body">
+          <h2>
+            <a data-post-link href={`${base}blog/${post.id}/`}>
+              {post.data.title}
+            </a>
+          </h2>
+          <p>{post.data.description}</p>
+          {post.data.tags.length > 0 && (
+            <ul class="tag-list" aria-label="Topics">
+              {post.data.tags.map((tag) => (
+                <li>
+                  <a href={`${base}blog/tags/${toTagSlug(tag)}/`}>#{tag}</a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </article>
+    ))
+  }
+</div>

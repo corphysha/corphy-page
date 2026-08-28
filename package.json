@@ -13,6 +13,7 @@
     "format": "biome format --write src/",
     "check": "biome check --write src/",
     "check:ci": "biome ci src/",
+    "test": "playwright test",
     "prepare": "husky"
   },
   "dependencies": {

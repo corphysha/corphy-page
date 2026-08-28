@@ -1,0 +1,34 @@
+---
+export interface Heading {
+  depth: number;
+  slug: string;
+  text: string;
+}
+
+export interface Props {
+  headings: Heading[];
+}
+
+const { headings } = Astro.props;
+---
+
+<aside class="table-of-contents" data-table-of-contents>
+  <nav aria-label="On this page">
+    <p class="table-of-contents-title">On this page</p>
+    {
+      headings.length > 0 ? (
+        <ol>
+          {headings
+            .filter((heading) => heading.depth >= 2 && heading.depth <= 3)
+            .map((heading) => (
+              <li class:list={{ "table-of-contents-nested": heading.depth === 3 }}>
+                <a href={`#${heading.slug}`}>{heading.text}</a>
+              </li>
+            ))}
+        </ol>
+      ) : (
+        <p class="table-of-contents-empty">This note has no sections.</p>
+      )
+    }
+  </nav>
+</aside>

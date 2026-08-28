@@ -13,6 +13,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# browser test artifacts
+playwright-report/
+test-results/
+
 # npm lockfile (using bun)
 package-lock.json
 

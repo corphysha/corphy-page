@@ -1,0 +1,57 @@
+<span class="sr-only" role="status" aria-live="polite" data-code-copy-status></span>
+
+<script>
+  function announce(message: string) {
+    const status = document.querySelector<HTMLElement>("[data-code-copy-status]");
+    if (status) status.textContent = message;
+  }
+
+  async function copyText(text: string): Promise<boolean> {
+    if (!navigator.clipboard?.writeText) return false;
+
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+
+  function initCodeCopyButtons() {
+    document.querySelectorAll<HTMLElement>(".article-content pre").forEach((pre) => {
+      if (pre.dataset.copyReady === "true") return;
+
+      const code = pre.querySelector("code");
+      if (!code) return;
+
+      pre.dataset.copyReady = "true";
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "code-copy-button";
+      button.textContent = "Copy";
+      button.setAttribute("aria-label", "Copy code");
+      button.dataset.codeCopy = "true";
+
+      button.addEventListener("click", async () => {
+        try {
+          const copied = await copyText(code.textContent ?? "");
+
+          if (!copied) throw new Error("The browser rejected the copy command.");
+
+          button.textContent = "Copied";
+          button.setAttribute("aria-label", "Copied");
+          announce("Copied");
+
+          window.setTimeout(() => {
+            button.textContent = "Copy";
+            button.setAttribute("aria-label", "Copy code");
+          }, 1800);
+        } catch {
+          announce("Unable to copy. Select the code manually.");
+        }
+      });
+
+      pre.appendChild(button);
+    });
+  }
+
+  initCodeCopyButtons();
+  document.addEventListener("astro:after-swap", initCodeCopyButtons);
+</script>

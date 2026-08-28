@@ -1,74 +1,90 @@
 ---
+import CodeCopyButton from "@/components/CodeCopyButton.astro";
+import TableOfContents from "@/components/TableOfContents.astro";
 import Layout from "@/layouts/Layout.astro";
+import type { BlogPost } from "@/lib/blog";
+import { formatPostDate, toTagSlug } from "@/lib/blog";
 import "@/styles/blog.css";
 
 export interface Props {
-  title: string;
+  date: Date;
   description: string;
+  headings: Array<{ depth: number; slug: string; text: string }>;
   image?: string;
-  date?: Date;
+  newer?: BlogPost;
+  older?: BlogPost;
+  readingTime: number;
+  tags: string[];
+  title: string;
 }
 
-const { title, description, image, date } = Astro.props;
+const { date, description, headings, image, newer, older, readingTime, tags, title } = Astro.props;
+const base = import.meta.env.BASE_URL;
 ---
 
-<Layout>
-  <article class="blog-post">
-    <header class="blog-post-header">
-      <a href="/corphy-page/blog/" class="blog-back">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M19 12H5"/>
-          <path d="M12 19l-7-7 7-7"/>
-        </svg>
-        Back to Blog
-      </a>
-      {
-        date && (
-          <div class="blog-post-meta">
-            <time datetime={date.toISOString()}>
-              {date.toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </time>
-          </div>
-        )
-      }
-      <h1 class="blog-post-title">{title}</h1>
-      <p class="blog-post-desc">{description}</p>
-      <slot name="tags" />
-    </header>
-    <div class="blog-post-content">
-      <slot />
-    </div>
-  </article>
-</Layout>
+<Layout title={title} description={description} {...(image ? { image } : {})}>
+  <main id="main-content" class="article-shell">
+    <article>
+      <header class="article-header">
+        <a class="article-back" href={`${base}blog/`}>Back to field notes</a>
+        <h1>{title}</h1>
+        <p class="article-description">{description}</p>
+        <div class="article-meta">
+          <time datetime={date.toISOString()}>{formatPostDate(date)}</time>
+          <span>{readingTime} min read</span>
+        </div>
+      </header>
 
-<script>
-  function initCopyButtons() {
-    const blocks = document.querySelectorAll(".blog-post-content pre");
-    blocks.forEach((pre) => {
-      if (pre.querySelector(".copy-btn")) return;
-      const btn = document.createElement("button");
-      btn.className = "copy-btn";
-      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
-      btn.title = "Copy code";
-      btn.addEventListener("click", async () => {
-        const code = pre.querySelector("code")?.textContent ?? pre.textContent ?? "";
-        await navigator.clipboard.writeText(code);
-        btn.classList.add("copied");
-        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-        btn.title = "Copied!";
-        setTimeout(() => {
-          btn.classList.remove("copied");
-          btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
-          btn.title = "Copy code";
-        }, 2000);
-      });
-      pre.appendChild(btn);
-    });
-  }
-  initCopyButtons();
-  document.addEventListener("astro:after-swap", initCopyButtons);
-</script>
+      <div class="article-layout">
+        <aside class="article-context">
+          <p class="article-context-title">Filed under</p>
+          {
+            tags.length > 0 ? (
+              <ul class="tag-list">
+                {tags.map((tag) => (
+                  <li>
+                    <a href={`${base}blog/tags/${toTagSlug(tag)}/`}>#{tag}</a>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p class="table-of-contents-empty">No topic has been assigned.</p>
+            )
+          }
+        </aside>
+
+        <div class="article-reading">
+          <div class="article-content">
+            <slot />
+          </div>
+
+          {
+            (newer || older) && (
+              <nav class="article-navigation" aria-label="Adjacent field notes">
+                {newer ? (
+                  <a href={`${base}blog/${newer.id}/`}>
+                    <span class="article-navigation-label">Newer note</span>
+                    <span class="article-navigation-title">{newer.data.title}</span>
+                  </a>
+                ) : (
+                  <span aria-hidden="true"></span>
+                )}
+                {older ? (
+                  <a href={`${base}blog/${older.id}/`}>
+                    <span class="article-navigation-label">Older note</span>
+                    <span class="article-navigation-title">{older.data.title}</span>
+                  </a>
+                ) : (
+                  <span aria-hidden="true"></span>
+                )}
+              </nav>
+            )
+          }
+        </div>
+
+        <TableOfContents headings={headings} />
+      </div>
+    </article>
+  </main>
+  <CodeCopyButton />
+</Layout>
