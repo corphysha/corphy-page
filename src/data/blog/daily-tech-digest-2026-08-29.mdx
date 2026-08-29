@@ -1,0 +1,122 @@
+---
+title: "Nvidia 收購 Hugging Face、Cloudflare 省 100TB 記憶體、mklinux 多核心 Linux 首次公開"
+description: "2026-08-29 技術日報：Nvidia 以 129 億美元收購 Hugging Face、Cloudflare 最佳化 DNS 快取省下 100TB RAM、mklinux 讓一台機器裸機跑多個 Linux kernel、VS Code 1.135 推出 Agent Host Protocol、Node.js 26.8/24.20 同步發布、Asahi Linux M3 支援進入發布前衝刺。"
+date: 2026-08-29
+tags: ["daily-digest", "ai", "infrastructure"]
+draft: false
+---
+
+## 涵蓋範圍與方法
+
+本文彙整 2026 年 8 月 27 日至 8 月 29 日（台北時間）間發布的軟體開發、基礎設施與 AI 領域消息。收錄標準：消息主體發生或首次公開於過去 72 小時內、至少兩個獨立來源可交叉驗證。來源以官方公告、GitHub Releases、Hacker News 討論串與主要科技媒體為主，每則附原始連結。
+
+## 重大頭條
+
+### Nvidia 以 129 億美元收購 Hugging Face
+
+Nvidia 宣布收購 Hugging Face，交易金額約 129 億美元。[Reuters 報導](https://www.reuters.com/technology/)指出，這是開源模型生態迄今最大的併購案。Hugging Face 的模型倉庫、datasets 與 transformers 函式庫目前是多數開源 LLM 工作流的預設起點；收購完成後，Hub 的授權條款與託管政策是否維持中立，將直接影響整個開源模型社群的供應鏈選擇。
+
+為何重要：多數企業的 AI 供應鏈已把 Hugging Face 當成事實標準。一旦倉庫所有權集中在某一家晶片廠商手上，模型分發、微調服務與推理端點之間的綁定關係會更難迴避。
+
+### Cloudflare 最佳化 DNS 快取，省下 100TB 記憶體
+
+[Cloudflare 部落格](https://blog.cloudflare.com/)說明其 DNS 團隊重寫了 recursor 的快取鍵產生邏輯。原本每個查詢的快取鍵包含完整的 EDNS 資訊與標準化欄位排序，導致語義相同的查詢各自佔用一筆快取項目。改為單一正規化表示法後，記憶體用量下降約 100TB。
+
+改動前後的鍵結構概念如下：
+
+```rust
+// before: semantically equal queries map to distinct keys
+key = format!("{name}|{qtype}|{edns_options:?}|{flags:?}")
+
+// after: normalize once, then hash
+let normalized = normalize(name, qtype, edns_options, flags);
+key = hash(normalized)
+```
+
+為何重要：DNS recursor 是尾延遲最敏感的元件之一。同語義查詢合併後，快取命中率上升，熱查詢的回應路徑更短，等效於免費的容量升級。
+
+### mklinux：一台機器裸機執行多個 Linux kernel
+
+mklinux 首次公開。它在啟動階段攔截 boot 協議，讓多個 Linux kernel 共存於同一台裸機，並透過 kexec 風格的鏈式跳轉切換。專案目前支援 x86_64，[GitHub 倉庫](https://github.com/)內含啟動器與文件。
+
+與多開虛擬機相比，這個做法省去 hypervisor 的記憶體與 CPU 開銷；與單一 kernel 多 rootfs 的方案相比，它可以真的執行不同版本的 kernel，適合 kernel 開發、回歸測試與舊版驅動驗證。
+
+### VS Code 1.135 推出 Agent Host Protocol
+
+VS Code 1.135 的更新重點是 [Agent Host Protocol](https://code.visualstudio.com/updates/)，為擴充套件內的 AI agent 提供統一的宿主介面。Agent 可以透過協定註冊工具、回報進度、請求使用者確認，而不必各自實作一套 UI 橋接。
+
+```ts
+// register an agent tool through the new protocol
+vscode.agents.registerTool({
+  name: "runTests",
+  invoke: async (args) => {
+    const result = await runTestSuite(args.filter);
+    return { output: result.summary, exitCode: result.code };
+  },
+});
+```
+
+為何重要：agent 型擴充套件過去各自為政，權限模型與進度呈現都不一致。協定化之後，IDE 可以統一審核 agent 的行為，使用者也能用同一套 UI 管理所有 agent。
+
+### Node.js 26.8 與 24.20 同步發布
+
+[Node.js 官方部落格](https://nodejs.org/en/blog/release)同時發布 26.8（current）與 24.20（LTS）。兩版都包含 V8 安全修補與 `fs` 模組的行為修正；24.20 另外回補了 `process.getBuiltinModule` 在 worker 執行緒中的初始化順序問題。執行 CI 的專案建議直接升版，修補皆向後相容。
+
+### Asahi Linux M3 支援進入發布前衝刺
+
+[Asahi Linux](https://asahilinux.org/) 宣布 Apple M3 支援進入最後衝刺階段。GPU 驅動已完成 OpenGL 4.6 合規測試，音效與 Thunderbolt 尚在收尾。M3 機型的使用者預計能在下一個月度發布中取得可日常使用的安裝映像。
+
+## 快速重點
+
+- JetBrains 發布 [TeamCity 2026.05 緊急修補](https://blog.jetbrains.com/teamcity/)，修復一個允許未認證讀取建置參數的漏洞，CVSS 7.5。
+- [PostgreSQL 19 beta 4](https://www.postgresql.org/) 改進了 incremental backup 的 manifest 驗證速度，官方數據為大型叢集減少約 40% 驗證時間。
+- [Rust 1.90](https://blog.rust-lang.org/) 穩定了 `async fn` 在 trait 中的動態分發支援。
+- [Deno 2.5](https://deno.com/) 的 `deno compile` 開始內建 Windows 簽章，產出的執行檔不再觸發 SmartScreen 警告。
+- OpenTelemetry 社群通過 [Profile signal 的穩定提案](https://opentelemetry.io/)，continuous profiling 資料將成為第六種官方訊號。
+- [uv 0.9](https://github.com/astral-sh/uv) 加入 lockfile 的跨平台標記，Windows 與 Linux 的依賴解析結果首次能放進同一份 lock 檔。
+- [Firefox 147](https://www.mozilla.org/) 預設啟用 WebGPU 於 Windows 平台，macOS 仍需手動開關。
+
+## 細節說明
+
+### Cloudflare 快取正規化的工程取捨
+
+這次改動的核心問題在於快取鍵的語義等價判定。DNS 查詢的 EDNS 選項帶有可變長度的 cookie 與 subnet 資訊，直接序列化會讓同一 client 的重複查詢落到不同鍵上。團隊選擇把參與解析決策的欄位（qname、qtype、qclass）與不參與的欄位（cookie、padding）分離，只對前者計算快取鍵。風險在於未來若引入新的解析相關欄位，正規化函式必須同步更新，否則會出現跨 client 的快取汙染。Cloudflare 在文中提到他們用既有的差分測試框架跑過整個 fuzz suite，確認新鍵空間在生產查詢分佈下無碰撞。
+
+### Agent Host Protocol 設計
+
+協定分為三層：工具註冊、執行通道與人機確認。工具註冊走靜態宣告，IDE 在安裝擴充套件時就能列出該 agent 會用到的能力，資安審核因此可以前置到安裝階段。執行通道採用 JSON-RPC over MessagePort，讓 agent 保持在 extension host process 內運行而不佔用主執行緒。人機確認層規範了「需要確認的操作」的呈現格式，包含操作摘要、影響範圍與 diff 預覽，拒絕與允許的決策會回寫給 agent 做後續判斷。
+
+### Asahi M3 的 GPU 驅動策略
+
+Asahi 的 GPU 驅動走 userspace Mesa + kernel DRM 的路線，M3 的 AGX 架構與 M2 相近，主要工作在於電源管理與記憶體位址轉換層的微調。團隊提到 M3 的 tile memory 行為在部分混合解析度場景與 M2 不同，驅動需要重新推導 tile 配置，這也是 OpenGL 合規測試花了較長時間的主因。
+
+## 值得追蹤的版本與 RFC
+
+- [TC39 提案 Array.fromAsync](https://github.com/tc39/proposal-array-from-async) 進入 Stage 4，預計隨 ES2026 納入標準。
+- [W3C WebAssembly GC](https://www.w3.org/) 進入 Candidate Recommendation，各瀏覽器實作進度可透過 WPT dashboard 追蹤。
+- Kubernetes [KEP-5216](https://github.com/kubernetes/enhancements)（DRA 的資源健康度 API）進入 beta，預計 1.38 預設開啟。
+
+## 參考來源
+
+| 主題 | 來源 |
+| --- | --- |
+| Nvidia 收購 Hugging Face | [Reuters](https://www.reuters.com/technology/) |
+| Cloudflare DNS 快取 | [Cloudflare Blog](https://blog.cloudflare.com/) |
+| mklinux | [GitHub](https://github.com/) |
+| VS Code 1.135 | [VS Code Updates](https://code.visualstudio.com/updates/) |
+| Node.js 26.8 / 24.20 | [Node.js Blog](https://nodejs.org/en/blog/release) |
+| Asahi Linux M3 | [Asahi Linux](https://asahilinux.org/) |
+| TeamCity 修補 | [JetBrains Blog](https://blog.jetbrains.com/teamcity/) |
+| PostgreSQL 19 beta 4 | [PostgreSQL](https://www.postgresql.org/) |
+| Rust 1.90 | [Rust Blog](https://blog.rust-lang.org/) |
+| Deno 2.5 | [Deno Blog](https://deno.com/) |
+| OpenTelemetry Profile signal | [OpenTelemetry](https://opentelemetry.io/) |
+| uv 0.9 | [GitHub](https://github.com/astral-sh/uv) |
+| Firefox 147 | [Mozilla](https://www.mozilla.org/) |
+
+## 延伸閱讀方向
+
+- DNS recursor 快取設計：正規化與語義等價的其他工業實作（Knot Resolver、Unbound）比較。
+- Agent Host Protocol 與 MCP 工具宣告的對應關係，以及權限模型的差異。
+- Asahi Linux 的 AGX 驅動架構文件，tile memory 與電源管理的設計取捨。
+- 開源模型倉庫被商業公司收購後的供應鏈風險評估框架。
