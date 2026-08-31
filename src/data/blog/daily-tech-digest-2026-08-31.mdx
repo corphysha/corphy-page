@@ -1,0 +1,196 @@
+---
+title: "Kiro Crew 開源、Sonar Hunter Agent GA 與 AI coding agent 採用率攀升"
+description: "2026-08-31 技術日報：Kiro Crew 將持續性 agent 工作區開源，SonarQube Hunter Agent 進入 GA，JetBrains 調查顯示 90% 專業開發者每週使用 AI coding agent，並整理 Codex、pnpm、LangChain、llama.cpp 等近期版本變更。"
+date: 2026-08-31
+tags: ["daily-digest", "ai", "security", "developer-tools"]
+draft: false
+---
+
+## 涵蓋範圍與方法
+
+本文彙整 2026 年 8 月 27 日 09:00 至 8 月 31 日 09:00 台北時間之間發布或首次公開的軟體開發、AI 與資安消息。已先比對 2026 年 8 月 29 日前一期日報的標題與頭條清單，重複事件與前一期已列出的版本更新不納入本期。收錄時優先使用官方公告、公開程式碼倉庫與獨立報導；供應商自行發布的採用率、效能與精準度數字會標明其資料性質。版本時間以來源頁面顯示的 UTC 時間為準，並以本期台北時間窗口判斷是否收錄。
+
+## 重大頭條
+
+### Kiro Crew 將持續性 agent 工作區開源
+
+[Kiro 官方公告](https://kiro.dev/blog/introducing-kiro-crew/)把 Kiro Crew 定義成能跨工作階段保存狀態、執行排程、管理多個 agent 與連接外部工具的開發工作區。[官方 GitHub repository](https://github.com/kirodotdev/KiroCrew)採 Apache License 2.0，支援本機或遠端執行，介面包含桌面應用程式、Web dashboard 與 TUI。[InfoQ 報導](https://www.infoq.com/news/2026/08/kiro-crew-coding-agents/)補充了 ACP、MCP、背景任務與安全控制的實作方向。
+
+官方公告稱，這個原本在 Amazon 內部叫做 MeshClaw 的 side project，在不到六個月內被超過 39,000 名 Amazon builders 採用，接近 500 名 contributor 送出 597 個更新，平均每週約 143 次 commit。這些數字是 Kiro 的內部採用資料，不是公開使用者統計。Kiro Crew 以記憶、可檢視的 skills、排程、heartbeat 與 checkpoint 把工作從一次性的 prompt 變成可恢復的流程。它也把每個 agent 的計畫、工具呼叫、核准閘門與結果放入 Activity view，讓操作者可以在任務執行中追蹤狀態。
+
+為何重要：背景 agent 的價值不只在同時開更多對話，而在於它可以在使用者離開後繼續處理 ticket triage、跨 repository 調查、遷移與 PR 監控。這同時放大了權限設計的風險。官方列出的 OS-level sandbox、拒絕優先的 command policy、敏感路徑保護、credential redaction 與 signed audit log，都是把 agent 當成可執行的開發基礎設施來管理，而不是單純的聊天介面。這些是產品方宣稱的控制措施，仍不能取代第三方安全稽核。
+
+### SonarQube Hunter Agent 進入 GA，SAST 之外增加邏輯漏洞檢查
+
+[SonarSource 公告](https://www.sonarsource.com/blog/hunter-agent-detects-logical-flaws/)於 2026 年 8 月 27 日宣布 SonarQube Hunter Agent 在 SonarQube Cloud Enterprise plan 一般可用，Server 支援仍在後續規劃。[OWASP A01:2025](https://owasp.org/Top10/2025/A01_2025-Broken_Access_Control/)提供風險背景，指出 Broken Access Control 仍列在第一名，所有受測應用程式都有某種形式的存取控制問題。[OWASP Top 10:2025](https://owasp.org/Top10/2025/)則將它放在新版十大風險的第一項。OWASP 連結用來核對風險分類，不是對 SonarQube 產品數字的獨立驗證。
+
+Hunter Agent 針對 Broken Access Control、Business Logic 與 Authentication and Session Management 三類問題。SonarSource 描述的處理流程分成 Analyze、Explore、Validate exploitability 與 Synthesize 四階段。候選結果先由另一個驗證 subagent 嘗試建立可行的攻擊路徑，無法證實的結果不會直接進入 SonarQube issue。官方表示，這個驗證層讓內部測試的平均 precision 落在 80% 到 90%，並在測試過程中找出超過 200 個 zero-day vulnerabilities。這些是 SonarSource 的內部測試數字，文章不把它們當成獨立 benchmark。
+
+為何重要：SQL injection 或 XSS 可以透過資料流與模式規則處理，"使用者能否讀取另一筆帳單"則需要理解身分、資源所有權與業務流程。OWASP 的 2025 資料列出 40 個相關 CWE、1,839,701 次 occurrences 與 32,654 個 CVE，說明這類問題不是少數特殊案例。把 exploitability validation 放在靜態掃描後面，至少讓安全團隊能看到一條可審查的推理路徑。它仍需要人工確認，因為模型產生的攻擊路徑與實際部署設定可能不一致。
+
+### AI coding agent 已成為日常工具，但不同採用數字不能直接相加
+
+[JetBrains Research 的 Developer Ecosystem Survey 2026 摘要](https://blog.jetbrains.com/research/2026/08/ai-coding-agent-adoption-2026/)調查超過 15,000 名專業開發者，樣本涵蓋 2026 年 5 月至 7 月的工作情況。報告稱 90% 的受訪者至少每週使用一次 AI coding agent，68% 每天使用。Claude Code 的工作採用率為 39%，Codex 為 16%，GitHub Copilot 為 21%，Cursor 為 12%，OpenCode 為 7%。[Kiro 官方資料](https://kiro.dev/blog/introducing-kiro-crew/)與[InfoQ 的報導](https://www.infoq.com/news/2026/08/kiro-crew-coding-agents/)則提供另一種指標，前者是單一公司內部的 39,000 名 builders，後者是對產品與內部採用資料的獨立報導。
+
+這幾組數字描述的不是同一件事。JetBrains 的 90% 是調查樣本中的使用頻率，Kiro 的 39,000 是產品在 Amazon 內部的組織採用量，兩者不能用來估算全球使用者數。JetBrains 也說明其調查依地區、就業狀態、程式語言與對 JetBrains 產品的熟悉度進行統計加權。這讓結果更適合用來觀察工具相對位置與工作習慣變化，不適合直接當成所有開發者的普查結果。
+
+為何重要：採用率上升後，評估重點會從 "能不能產生程式碼" 轉向權限、可追蹤性、成本與失敗後的恢復。Kiro Crew 把持久狀態與排程放進產品核心，Sonar 把另一個 agent 放在程式碼驗證位置，兩者都在處理單次生成之外的工作。對團隊而言，導入 agent 時應分開記錄使用頻率、任務完成率、人工核准率與實際缺陷率。只記錄產生了多少行程式碼，無法回答 agent 是否讓交付更安全。
+
+## 快速重點
+
+- [OpenAI Codex 0.151.0](https://github.com/openai/codex/releases/tag/rust-v0.151.0) 加入 optional MCP server 的可設定工具探索寬限期、MCP tool result 的攔截與替換 extension，並修正 model fallback、遠端 sandbox 路徑與巢狀 subagent token budget。
+- [OpenAI Codex 0.152.0-alpha.4](https://github.com/openai/codex/releases/tag/rust-v0.152.0-alpha.4) 在 8 月 30 日發布，屬於 alpha channel，release body 尚未列出細部變更，不能視為穩定版功能承諾。
+- [pnpm 12.1.0](https://github.com/pnpm/pnpm/releases/tag/v12.1.0) 更新 workspace task orchestration，支援每個 task 的 concurrency 上限，也讓遠端 build artifact 帶著簽署來源資訊保存與重新驗證。
+- [LangChain 1.4.0a2](https://github.com/langchain-ai/langchain/releases/tag/langchain%3D%3D1.4.0a2) 首次提供 `langchain.mcp` 的 `MCPAdapter` alpha preview，直接使用 FastMCP 的連線、OAuth、cache 與 timeout 能力。
+- [llama.cpp b10705](https://github.com/ggml-org/llama.cpp/releases/tag/b10705) 修正 `TENSOR_READ_LAZY` handling，並提供 CPU、Vulkan、ROCm 7.14、OpenVINO 與多種作業系統架構的建置檔與 attestation。
+- [Ollama v0.33.2](https://github.com/ollama/ollama/releases/tag/v0.33.2) 修復 macOS app 的 system appearance、重複啟動與 Claude Desktop proxy 在 model catalog 更新時中斷進行中請求的問題。
+- [Gemini CLI nightly 2026-08-30](https://github.com/google-gemini/gemini-cli/releases/tag/v0.59.0-nightly.20260830.g0bd1d4397) 以 nightly channel 發布，tag 本身只有完整變更連結，適合測試而非鎖定 production workflow。
+- [Next.js v16.4.0-canary.12](https://github.com/vercel/next.js/releases/tag/v16.4.0-canary.12) 修正 non-interactive upgrade codemod prompt、支援轉換 `.mjs` 檔案，並調整 SST block 的 key ordering 與 CI workflow。
+- 一篇[第三方分析](https://blog.imseankim.com/kiro-powers-prompt-injection-workspace-exfiltration-no-cve-5-gaps/)整理 8 月 27 日公開的 Kiro Powers prompt injection 揭露，文中稱 Windows 的 Kiro IDE 0.7.45 受影響、0.8.140 修復，並指出目前沒有 CVE。這不是 Kiro 官方公告，版本對應與修復狀態應向供應商核對。
+
+## 細節說明
+
+### Kiro Crew 的持久工作模型
+
+Kiro Crew 的基本改變是把 agent 的生命週期拉長到單次 session 之外。官方 GitHub README 說明它可以在本機或遠端硬體執行，透過 desktop app、Web dashboard、CLI 以及 Slack、Discord 等連接工具繼續同一個工作。工作狀態由 conversations、files、tasks、approvals、memory、schedules 與 Apps 組成。這些資料讓 agent 能在下一次工作階段取回 project context，也讓操作者可以檢視、修改或刪除它保存的 skills 與 lessons。ACP 負責 agent orchestration，MCP 則負責把外部工具接入工作區。
+
+官方 Linux README 提供一行安裝指令。實務上可以拆成下載、檢查與執行三步，降低把未檢查的遠端內容直接交給 shell 的風險：
+
+```bash
+curl -fsSL -o /tmp/kirocrew-cli.sh https://download.crew.kiro.dev/cli.sh
+less /tmp/kirocrew-cli.sh
+sh /tmp/kirocrew-cli.sh
+kirocrew service install
+```
+
+上面的下載網址、`kirocrew service install` 與 Linux dashboard 位置來自[官方 repository 的 Quick start](https://github.com/kirodotdev/KiroCrew)。它不是一個可直接套用到其他 agent 的標準 API，因為 Kiro Crew 的公開資料目前以產品操作與 repository 文件為主。安全控制也必須在實際部署後驗證，尤其是 sandbox 是否啟用、credential redaction 是否涵蓋團隊的 secret path，以及 signed audit log 是否被送到獨立保存位置。若把它接到 CI 或排程，最小權限、短期 token 與人工 approval 應該先於自動化任務上線。
+
+### Hunter Agent 把邏輯漏洞拆成可審查步驟
+
+Hunter Agent 的核心不是再送出一個 "請找漏洞" prompt，而是把搜尋與驗證拆開。Analyze 階段從 security playbook 產生候選結果，Explore 階段建立 repository 結構並切分大型程式碼庫，Validate exploitability 階段嘗試證明攻擊路徑，Synthesize 階段才整理成單一 finding。SonarSource 表示這套流程可以處理超過 1,000 萬行的 codebase，並讓 finding 帶有 discovery path。這個設計讓 reviewer 能區分模型的猜測與已經通過第二階段驗證的結果。
+
+以下是依照公開流程整理的示意資料結構，不是 SonarQube 公開 API：
+
+```ts
+type Finding = {
+  path: string;
+  kind: "access-control" | "business-logic" | "session";
+  evidence: string[];
+  attackPath: string[];
+  status: "candidate" | "confirmed" | "rejected";
+};
+
+async function validate(finding: Finding): Promise<Finding> {
+  const attackPath = await tryToDemonstrateExploit(finding);
+
+  return {
+    ...finding,
+    attackPath,
+    status: attackPath.length > 0 ? "confirmed" : "rejected",
+  };
+}
+```
+
+實際整合時，不能把 `confirmed` 當成自動修補許可。團隊仍需檢查執行環境、feature flag、權限服務與測試資料是否和 agent 讀到的 repository 一致。OWASP 的建議是讓 access control 在可信任的 server-side code 或 serverless API 中執行，並以 deny by default、record ownership、失敗記錄與 rate limit 降低風險。這也是 Hunter Agent 最適合接在 code review 與測試流程中的原因，finding 可以進入既有的人工 triage，而不是直接改動 production。
+
+### pnpm 與 LangChain 把 agent 依賴管理推向更細的控制
+
+pnpm 12.1.0 同時處理安全設定與 monorepo 執行效率。新版會把 `pnpm login` 或 `pnpm adduser` 取得的 token 寫入 global `config.yaml`，scope 則路由到相應 registry。專案的 `pnpm-workspace.yaml` 如果設定 scope，現在會被忽略並顯示應該修改的位置，避免一個 repository 內的設定影響使用者其他專案。遠端 build artifact 會保存 signed origin metadata，重新使用前會根據 trust、policy、platform 與 source 再驗證。這些改動對含有 agent 產生檔案的 monorepo 特別實用，因為 cache 與 registry 設定不應該默默改變其他 workspace 的執行環境。
+
+新版 workspace task orchestration 也允許每個 task 設定併發上限：
+
+```yaml
+tasks:
+  build:
+    concurrency: 2
+  test:
+    dependsOn: ["build"]
+  lint: {}
+```
+
+`tasks.<name>.concurrency` 會限制同一 workspace 中該 task 同時執行的數量。對平行 agent 或大型 monorepo，這能避免所有 project 同時啟動 build，把 CPU、記憶體或遠端 cache 配額一次用完。設定仍應配合 task dependency graph 驗證，因為 concurrency 只限制數量，不會自動修正錯誤的 `dependsOn`。
+
+LangChain 1.4.0a2 則從 agent 連線邊界切入。release note 將 `MCPAdapter` 放在 `langchain.mcp`，接受 URL、本機 script、in-process FastMCP server、多 server config 或現成的 `fastmcp.Client`。下面是 release note 的核心用法，alpha API 可能在正式版前變更：
+
+```python
+from langchain.agents import create_agent
+from langchain.mcp import MCPAdapter
+
+async with MCPAdapter("https://example.com/mcp") as adapter:
+    agent = create_agent(
+        "anthropic:claude-sonnet-5",
+        await adapter.get_tools(),
+    )
+    result = await agent.ainvoke({
+        "messages": [
+            {"role": "user", "content": "檢查待處理的部署事件"}
+        ]
+    })
+```
+
+需要 OAuth、cache 或 timeout 時，release note 建議先建立 FastMCP `Client` 再交給 adapter，而不是在 LangChain 內另做一套連線層。這種分工讓 MCP 的 transport 與認證行為保持在 FastMCP，LangChain 負責把 tools 交給 `create_agent`。在 production 使用前，應固定 alpha 版本、限制可載入的 server、記錄 tool call，並讓高影響操作經過明確核准。
+
+### Codex、llama.cpp 與本機模型工具的近期變化
+
+OpenAI Codex 0.151.0 的變更集中在工具發現、權限狀態與 sandbox 邊界。MCP server 可以有可設定的 discovery grace period，extension 可以在 tool result 送到 model 前檢查或替換結果。修補項目也包含保留 TUI permission profile、避免 `/cd` 弱化 sandbox、使用 executor 真實的 home directory 與作業系統路徑，以及把巢狀 subagent token usage 計入 root goal budget。這幾個變更直接影響長時間、遠端與多 agent 工作，不只是 UI 更新。[0.151.0 release note](https://github.com/openai/codex/releases/tag/rust-v0.151.0)已列出各項 pull request。
+
+Codex 0.152.0-alpha.4 和 Gemini CLI nightly 都屬於預覽通道。它們適合建立隔離的 smoke test，不能和 production lockfile 的穩定版本混用。對 agent 工具而言，預覽版除了 API 變更，還可能改變 permission、tool discovery 或 telemetry 行為。測試紀錄應保存 CLI 版本、model、MCP server 清單與 approval policy，否則失敗很難重現。
+
+llama.cpp b10705 的 release note 只有一個主要修正，改善 `TENSOR_READ_LAZY` handling，並在 lazy 啟用時強制 CPU lazy tensor。它同時提供多種 CPU、Vulkan、ROCm、OpenVINO、SYCL、CUDA、Android、macOS 與 Windows 建置檔。release 頁面也附有 GitHub attestation，讓下載的 artifact 至少有可核對的來源證明。Ollama v0.33.2 則是較小的修補版，重點是 macOS 外觀同步、避免 app 重複啟動，以及 Claude Desktop proxy 不再因 model catalog 更新打斷進行中的請求。這些版本的共同點是本機推理工具開始把長時間運作與作業系統整合列為一等問題。
+
+## 主題分類
+
+### Agent 平台與協定
+
+Kiro Crew 把 ACP、MCP、memory、skills、schedules 與 Apps 放進持久工作區。LangChain 1.4.0a2 讓 MCP server 更直接地成為 `create_agent` 的 tools。Codex 0.151.0 則把 MCP discovery、tool result extension 與遠端 sandbox 納入同一版穩定更新。
+
+### 應用程式安全
+
+SonarQube Hunter Agent 聚焦存取控制、業務流程與 session 邏輯。OWASP Top 10:2025 仍把 Broken Access Control 放在第一項。第三方對 Kiro Powers 的揭露提醒團隊，repository-controlled content、steering file 與 MCP configuration 可能同時具有資料與設定的角色，需先確認供應商的版本與修復公告。
+
+### 依賴、快取與建置
+
+pnpm 12.1.0 將 registry token、signed build artifact、task resume 與 workspace concurrency 拆成可設定的控制項。llama.cpp 與 Ollama 的近期版本則維持多平台 artifact 與長時間本機服務的穩定性。Next.js 16.4.0-canary.12 的 codemod 與 CI 變更也屬於預覽版使用者需要鎖定測試的範圍。
+
+### 採用與工程治理
+
+JetBrains 的調查顯示 AI coding agent 已進入多數受訪專業開發者的每週工作流程。採用數字必須和資料來源、抽樣方式、產品內部 telemetry 分開閱讀。真正適合拿來管理的指標，應包含權限升級次數、人工核准比例、可重現失敗率與 agent 產生缺陷的修復時間。
+
+## 值得追蹤的版本、RFC 與提案
+
+- [pnpm workspace task orchestration RFC #23](https://github.com/pnpm/rfcs/pull/23)：觀察 `tasks`、`dependsOn` 與 concurrency 在大型 monorepo 的相容性。
+- [LangChain 1.4.0 alpha release](https://github.com/langchain-ai/langchain/releases/tag/langchain%3D%3D1.4.0a2)：追蹤 `langchain.mcp` 在正式版前的 API 與認證行為。
+- [OpenAI Codex 0.152.0-alpha.4](https://github.com/openai/codex/releases/tag/rust-v0.152.0-alpha.4)：留意 MCP tool result extension、model fallback 與 sandbox 改動是否進入穩定線。
+- [Kiro Crew issues and pull requests](https://github.com/kirodotdev/KiroCrew)：追蹤 approval、MCP integration、remote Gateway 與安全控制的實際修補紀錄。
+- [OWASP A01:2025 Broken Access Control](https://owasp.org/Top10/2025/A01_2025-Broken_Access_Control/)：將 record ownership、deny by default、rate limit 與 authorization test 納入 code review checklist。
+- [llama.cpp b10705 attestation](https://github.com/ggml-org/llama.cpp/releases/tag/b10705)：核對不同硬體建置檔與 artifact provenance。
+
+## 參考來源表
+
+| 主題 | 來源與時間 |
+| --- | --- |
+| Kiro Crew 官方公告 | [Introducing Kiro Crew](https://kiro.dev/blog/introducing-kiro-crew/)（頁面摘錄未顯示發布日期，2026-08-31 查閱，免費） |
+| Kiro Crew 程式碼 | [kirodotdev/KiroCrew](https://github.com/kirodotdev/KiroCrew)（2026-08-31 查閱，免費） |
+| Kiro Crew 第三方報導 | [AWS Open Sources Kiro Crew for Asynchronous Coding Agents](https://www.infoq.com/news/2026/08/kiro-crew-coding-agents/)（2026-08-30 08:23 UTC，免費） |
+| SonarQube Hunter Agent | [SonarQube Hunter Agent is now GA](https://www.sonarsource.com/blog/hunter-agent-detects-logical-flaws/)（2026-08-27，免費） |
+| Broken Access Control 風險 | [A01:2025 Broken Access Control](https://owasp.org/Top10/2025/A01_2025-Broken_Access_Control/)（OWASP Top 10:2025，免費） |
+| OWASP Top 10 版本總覽 | [OWASP Top 10:2025](https://owasp.org/Top10/2025/)（2025 版，免費） |
+| AI coding agent 採用調查 | [AI Coding Agents: Adoption Trends](https://blog.jetbrains.com/research/2026/08/ai-coding-agent-adoption-2026/)（2026 調查，頁面摘錄未顯示發布日期，免費） |
+| Codex 0.151.0 | [rust-v0.151.0](https://github.com/openai/codex/releases/tag/rust-v0.151.0)（2026-08-29 09:55 UTC，免費） |
+| Codex 0.152.0-alpha.4 | [rust-v0.152.0-alpha.4](https://github.com/openai/codex/releases/tag/rust-v0.152.0-alpha.4)（2026-08-30 13:56 UTC，免費） |
+| pnpm 12.1.0 | [v12.1.0](https://github.com/pnpm/pnpm/releases/tag/v12.1.0)（2026-08-29 14:19 UTC，免費） |
+| LangChain 1.4.0a2 | [langchain==1.4.0a2](https://github.com/langchain-ai/langchain/releases/tag/langchain%3D%3D1.4.0a2)（2026-08-28 16:19 UTC，免費） |
+| llama.cpp b10705 | [b10705](https://github.com/ggml-org/llama.cpp/releases/tag/b10705)（2026-08-30 23:15 UTC，免費） |
+| Ollama v0.33.2 | [v0.33.2](https://github.com/ollama/ollama/releases/tag/v0.33.2)（2026-08-27 20:31 UTC，免費） |
+| Gemini CLI nightly | [v0.59.0-nightly.20260830.g0bd1d4397](https://github.com/google-gemini/gemini-cli/releases/tag/v0.59.0-nightly.20260830.g0bd1d4397)（2026-08-30 01:27 UTC，免費） |
+| Next.js canary | [v16.4.0-canary.12](https://github.com/vercel/next.js/releases/tag/v16.4.0-canary.12)（2026-08-29 23:38 UTC，免費） |
+| Kiro Powers 第三方分析 | [Kiro Powers Prompt Injection Needs No Prompt](https://blog.imseankim.com/kiro-powers-prompt-injection-workspace-exfiltration-no-cve-5-gaps/)（2026-08-27，非官方分析，免費） |
+
+## 延伸閱讀方向
+
+- 持久性 agent 的 memory、checkpoint、approval 與 audit log 資料模型
+- MCP server 的來源驗證、OAuth scope、tool result filtering 與撤銷流程
+- Broken Access Control 的 record ownership 測試與 agent 輔助驗證
+- pnpm workspace task graph、signed build artifact 與 remote cache trust
+- 本機推理工具的 artifact attestation、硬體 backend 與長時間服務可靠性
+- AI coding agent 採用率、人工核准率、缺陷率與成本的測量設計
