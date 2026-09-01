@@ -1,0 +1,216 @@
+---
+title: "KindaRails2Shell 實際遭利用、NVLink Fusion 擴大客製 AI 晶片互聯，Solaris 將介面變成生成式執行層"
+description: "2026-09-01 技術日報：Ruby on Rails CVE-2026-66066 出現實際利用跡象，NVIDIA 與 MediaTek 以 NVLink Fusion 推進客製 XPU，Runway 發布 Solaris Interface World Model，並整理 Astro、Electron、EAS CLI、n8n 與多項 agent 工具的新版本。"
+date: 2026-09-01
+tags: ["daily-digest", "security", "ai", "infrastructure", "developer-tools"]
+draft: false
+---
+
+## 重大頭條
+
+### 續報：CVE-2026-66066 已出現實際利用跡象
+
+Ruby on Rails 的 Active Storage 漏洞 CVE-2026-66066 在 8 月 31 日獲得新的威脅情報確認。[Help Net Security 的更新](https://www.helpnetsecurity.com/2026/08/03/kindarails2shell-cve-2026-66066-vulnerability/)轉述 VulnCheck 已在 Canary network 觀察到利用活動，[SecurityWeek](https://www.securityweek.com/critical-ruby-on-rails-vulnerability-in-attackers-crosshairs/)與[BetaNews](https://betanews.com/article/rails-cve-2026-66066-exploited/)也分別報導相同的攻擊跡象。這是對原先 7 月修補公告的續報，新增內容是「漏洞已被實際利用」與修補後環境仍須檢查的鑑識風險，不是重新報導漏洞本身。
+
+漏洞影響使用 libvips 作為 Active Storage variant processor、並接受不受信任影像上傳的應用程式。[Rails 官方 advisory](https://github.com/rails/rails/security/advisories/GHSA-xr9x-r78c-5hrm)列出的修補版本是 7.2.3.2、8.0.5.1 與 8.1.3.1，且要求 libvips 至少為 8.13。官方也明確提醒，若程序環境中的 secret 可能已被讀取，單純升級不會撤銷已外洩的憑證，應輪替 `secret_key_base`、資料庫憑證、物件儲存金鑰與其他外部服務 token。Rails 團隊另提供了[鑑識工具 repository](https://github.com/rails/rails-forensics-CVE-2026-66066)，用來判斷應用程式曾暴露多久，以及 Active Storage 是否留下遭利用的證據。
+
+為何重要：這起事件把「有修補版本」和「事件已結束」清楚分開。VulnCheck 的測試結果由多家報導引述，指出固定版本仍可能存在涉及 variation-key Marshal deserialization 的後續風險，但該路徑需要有效簽章，不能直接等同於所有已升級伺服器都可被未授權入侵。部署團隊應同時完成版本盤點、上傳路徑盤點、秘密輪替、session 失效處理與 object store 鑑識，並把官方工具的結果當作證據之一，而不是唯一證明。
+
+### NVIDIA 投資 MediaTek 35 億美元，NVLink Fusion 連接客製 XPU
+
+[NVIDIA 與 MediaTek 的官方公告](https://www.mediatek.com/press-room/nvidia-and-mediatek-deepen-long-standing-partnership-to-build-ai-edge-to-cloud-computing-platforms)指出，NVIDIA 投資 MediaTek 發行的 35 億美元可轉換公司債，MediaTek 同時採用 NVIDIA NVLink Fusion 平台，讓客戶設計的 custom XPU 能接入 NVIDIA NVLink 連接的 rack-scale AI factory。[Reuters](https://www.reuters.com/world/asia-pacific/nvidia-invests-35-billion-mediatek-convertible-bonds-2026-08-31/)報導這筆投資屬於 MediaTek 39 億美元海外可轉換公司債發行的一部分，[TechCrunch](https://techcrunch.com/2026/08/31/nvidias-3-5b-mediatek-bet-reveals-its-plan-for-tackling-big-techs-ai-chip-buildout/)則指出，這項合作讓 NVIDIA 在客製晶片增加的情況下，仍掌握資料中心的互聯與機架級軟硬體生態系。[Nikkei Asia](https://asia.nikkei.com/business/electronics/nvidia-invests-3.5-billion-in-mediatek-convertible-bonds)也報導了同一筆交易與其對 AI 產業循環融資疑慮的背景。
+
+官方列出的技術組件包括 NVLink Fusion Chiplet、NVLink-C2C 與 NVHBM。前者把客製 XPU 接到 NVLink scale-up fabric，可使用 photonics 或 electrical interconnect；NVLink-C2C 負責 XPU、NVIDIA Rosa CPU 與其他相容處理器之間的高頻寬連接；NVHBM 則把客製記憶體能力納入 XPU 設計。這套組合把 chiplet、先進封裝、SerDes、HBM、I/O 與 rack-scale qualification 放在同一個交付邊界內。
+
+為何重要：雲端業者和 AI 實驗室希望以 ASIC 或其他 XPU 降低單一 GPU 供應商依賴，但自訂晶片若無法接上既有叢集，單顆晶片的效能沒有實際價值。NVLink Fusion 的策略是允許差異化計算核心存在，同時把 scale-up fabric、記憶體、封裝與機架整合留在 NVIDIA 生態系。這可能降低客製 XPU 從 tape-out 走到可部署機架的工程門檻，也使互聯協定、韌體、驅動和軟體相容性成為新的供應商鎖定邊界。官方公告只描述平台與合作方向，沒有公布客製 XPU 的型號、效能、功耗或量產時程，這些項目不能從投資金額推導。
+
+### Runway 發布 Solaris，將介面當成 Interface World Model
+
+[Runway 官方公告](https://runway.com/news/research/introducing-solaris)在 8 月 31 日發布 Solaris，稱它是 Interface World Models 家族的第一個模型，研究問題是作業系統能否在使用者操作時生成 app 與 website。Runway 目前只開放 early access 申請，沒有公布公開 API、價格、硬體需求或正式上市日期。[RuntimeWire](https://runtimewire.com/article/runway-solaris-interface-world-model-real-time/)報導，Solaris 被描述為以逐 frame 方式生成互動介面，[Crypto Briefing](https://cryptobriefing.com/runway-solaris-interactive-interface-model/)與[Glitchwire](https://glitchwire.com/news/runways-solaris-turns-any-prompt-into-a-functioning-interface-no-code-required/)則補充其定位是從 Gen-4.5 延伸而來的即時介面研究。
+
+Solaris 的概念和傳統 UI generator 不同。傳統工具輸出 HTML、CSS、JavaScript 或原生 UI 樹，使用者之後操作的是已編譯或已解譯的程式；Solaris 的公開描述則把介面視為模型持續生成的畫面與互動狀態。這代表「畫面像不像」只是第一層，還需要回答輸入事件是否可重現、狀態是否穩定、文字是否正確、後端請求如何驗證，以及使用者登入和權限如何接入。Runway 的公告沒有提供可供外部開發者重現的 benchmark 或 API schema，第三方文章中關於效能與結構相似度的說法應視為公司研究方向的轉述。
+
+為何重要：若模型能直接生成可操作介面，前端開發的瓶頸可能從元件實作移到狀態一致性、資料邊界與安全性。對 prototype 而言，逐 frame 生成或許能快速探索不存在於既有 design system 的互動；對 production 而言，缺少可檢查的程式碼、DOM 語意、可存取性與測試介面會使除錯和合規更困難。這個方向值得追蹤，但目前只能確認 Solaris 是研究預覽與 early access 計畫，不能把它寫成已可取代 web framework 的產品。
+
+## 快速重點
+
+- [CVE-2026-66066 續報](https://www.helpnetsecurity.com/2026/08/03/kindarails2shell-cve-2026-66066-vulnerability/)：VulnCheck 的 Canary network 在 8 月 31 日更新中被報導已看到利用活動；受影響的 Rails 應用程式除了升級，也需要做秘密輪替與鑑識。
+- [NVIDIA 與 MediaTek 合作](https://www.mediatek.com/press-room/nvidia-and-mediatek-deepen-long-standing-partnership-to-build-ai-edge-to-cloud-computing-platforms)：35 億美元可轉換公司債投資搭配 NVLink Fusion，官方列出 NVLink Fusion Chiplet、NVLink-C2C 與 NVHBM。
+- [Runway Solaris](https://runway.com/news/research/introducing-solaris)：Interface World Model 研究預覽開放 early access 申請，公開資料尚未包含 API、價格或硬體規格。
+- [Astro 7.2.10](https://github.com/withastro/astro/releases/tag/astro%407.2.10)：修正 `@astrojs/markdown-remark` 精確版本鎖定、minified SSR manifest 造成的啟動 `Invalid URL`，以及 Windows content collection 開發伺服器的 stale content。
+- [Electron 43.5.0](https://releases.electronjs.org/release/v43.5.0)：更新 Chromium 150.0.7871.250 與 Node.js 24.19.0，並修正 Wayland 視窗還原、Linux ARM64 檔案旗標、renderer crash 與 IPC 大型值傳輸成本。
+- [EAS CLI 23.2.0](https://github.com/expo/eas-cli/releases/tag/v23.2.0)：`eas simulator` 新增 `--tag`，workflow log 改為即時更新，並加入 `eas workflow:ssh` 與 `eas workflow:run --ssh`。
+- [n8n 2.37.6 beta](https://github.com/n8n-io/n8n/releases/tag/n8n%402.37.6)：修正 dynamic-credential storage 傳遞 execution ID 的核心問題；n8n 文件目前把 2.36.9 列為 stable、2.37.6 列為 beta。
+- [Strawberry GraphQL 0.325.0](https://github.com/strawberry-graphql/strawberry/releases/tag/0.325.0)：`assert_no_errors` 在 GraphQL error 出現時提供更完整的錯誤細節，改善測試失敗的定位。
+- [Hermes Agent v0.21.0](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.8.31)：公開 release note 列出 Bot Mode、可延續的 cron memory、執行中的 subagent steering、MCP 管理介面與桌面瀏覽器控制。
+- [OpenClaw 2026.8.1](https://github.com/openclaw/openclaw/releases/tag/v2026.8.1)：新增可搜尋過往對話、paired device 或 cloud worker session、持久進度卡、遮罩式 credential request，以及可撤銷的 recurring operation approval。
+
+## 細節說明
+
+### Rails：從版本修補延伸到事件回應
+
+CVE-2026-66066 的技術根源是不同元件對同一個上傳檔案採用不同的型別判斷方式。Rails 的 Active Storage 會使用 client-supplied content type 判斷是否進行 image variant 處理，libvips 則會根據 magic bytes 選擇實際 loader；官方 advisory 說明，未封鎖的 unfuzzed operation 可能讓受污染檔案進入不應處理的格式路徑。Rails forensic repository 進一步描述了 MATLAB、libmatio 與 HDF5 External File List 串起的檔案讀取鏈，但沒有提供可直接產生攻擊檔案的工具。這種「框架欄位和底層函式庫各自相信不同訊號」的組合，是影像處理邊界常見的風險型態。
+
+修補動作不能只看 Rails gem 的版本。官方要求 libvips 至少為 8.13，因為較早版本無法封鎖 unfuzzed operations；使用 ruby-vips 2.2.1 或更新版本時，也可以在 initializer 呼叫 `Vips.block_untrusted(true)`。若環境仍使用舊版 libvips，官方列出的實務替代方案是移除 libvips 依賴或停止把不受信任上傳交給該處理器。這些是降低風險的設定，不是對既有入侵的補救。
+
+下面的差異只展示安全升級和防護設定，不包含攻擊 payload：
+
+```ruby
+# Gemfile：受影響的版本範例
+gem "rails", "~> 8.1.0"
+gem "ruby-vips", "~> 2.1"
+
+# Gemfile：固定到 Rails advisory 列出的修補線
+gem "rails", "~> 8.1.3.1"
+gem "ruby-vips", ">= 2.2.1"
+```
+
+```ruby
+# config/initializers/vips_security.rb
+# 只有在 ruby-vips >= 2.2.1 且 libvips >= 8.13 時採用
+if defined?(Vips)
+  Vips.block_untrusted(true)
+end
+```
+
+應用程式還要重設 `secret_key_base`、`RAILS_MASTER_KEY`、資料庫密碼、S3 或其他物件儲存金鑰，以及所有能被 Rails process 讀取的外部服務 token。重設 `secret_key_base` 會使既有 session、signed cookie、signed global ID 與部分 Active Storage URL 失效，因此要安排重新登入和背景工作重試。鑑識時應檢查 Active Storage blob、variant、object store 與應用程式 log 的時間線，再比對 deployment、secret rotation 和登入紀錄。只有看到「目前版本已修補」而沒有完成鑑識，不能排除修補前已經發生的資料外洩。
+
+VulnCheck 另被報導指出，在固定版本 8.1.3.1 上，若攻擊者已持有有效簽章，variation-key 的 Marshal deserialization 仍可能形成另一條執行路徑。這項說法來自安全公司測試與媒體轉述，不是 Rails advisory 對固定版本的普遍失效宣告。工程團隊應把它轉化成「已取得有效簽章後的次級風險」來評估，並優先撤銷或輪替可能暴露的簽章材料。對外服務的 image upload endpoint 仍應採用 allowlist、大小限制、獨立處理程序與最小檔案系統權限。
+
+### NVLink Fusion：客製計算核心和既有機架的接合層
+
+NVLink Fusion 的重點不是推出一顆新的通用 GPU，而是提供一套讓第三方或雲端業者客製 XPU 接入 NVIDIA rack-scale architecture 的預驗證基礎。官方公告把它描述成 prebuilt、prequalified、system-prevalidated 的 multi-die XPU foundation。這個邊界涵蓋了 scale-up fabric、chiplet、C2C、HBM、先進封裝與製造支援，客戶可以把工程資源集中在差異化計算。Reuters 與 TechCrunch 的報導則把它放到 AI 業者自研 ASIC 增加的產業背景中解讀。
+
+官方列出的三個組件各自處理不同層級的問題。NVLink Fusion Chiplet 負責把 XPU 接到 NVLink scale-up fabric，可選 photonics 或 electrical interconnect；NVLink-C2C 連接 XPU、NVIDIA Rosa CPU 和其他相容處理器；NVHBM 把記憶體能力納入 XPU，讓頻寬和能效設計與計算核心一起被調整。這些名稱描述的是平台元件，不是已經公開的單一晶片產品。公告沒有給出互聯頻寬、封裝節點、功耗上限或客戶量產時間，所以不能用平台名稱推算 benchmark。
+
+可以把公開資訊整理成以下介面邊界，這是架構示意，不是 NVIDIA API 或可編譯 SDK：
+
+```ts
+type CustomXpuRackIntegration = {
+  compute: {
+    xpuDies: number;
+    customerDefinedAccelerator: true;
+  };
+  interconnect: {
+    fusionChiplet: "NVLink scale-up fabric";
+    hostLink: "NVLink-C2C";
+  };
+  memory: {
+    customizedHbm: "NVHBM";
+  };
+  rack: {
+    architecture: "NVIDIA MGX";
+    qualification: "system-prevalidated";
+  };
+};
+```
+
+軟體團隊實際需要追蹤的，不只是一個 link layer。XPU 進入既有 AI factory 後，還必須處理 device enumeration、driver ABI、collective communication、memory consistency、telemetry、容錯和容器編排。若這些部分由 NVIDIA 和 MediaTek 共同驗證，導入成本可能低於從零建立互聯與機架 qualification；但也代表軟體堆疊的相容性測試會集中到特定供應商版本。對大型訓練叢集而言，還需要用真實 workload 比較 all-reduce、parameter sharding、checkpoint I/O 和故障復原，而不能只看單卡 throughput。
+
+這項合作也延伸到 local AI computing 與 automotive。官方公告提到 DGX Spark 的 GB10 Grace Blackwell Superchip，以及下一代 RTX Spark PC chips；車用部分則是 MediaTek Dimensity Auto 平台和 NVIDIA RTX、DRIVE AGX 的整合。這些是合作範圍，不代表所有產品都在同一天換用 NVLink Fusion。對開發者而言，近期較可見的影響是客製推理加速器可能更容易以 NVIDIA rack 為部署目標，而不是立刻出現新的公開程式設計模型。
+
+### Solaris：從生成程式碼轉向生成互動狀態
+
+傳統 web app 先由開發者定義 component、state、event handler 和資料請求，再由瀏覽器完成 layout 與繪製。以下是一般 React 介面用程式碼固定互動邊界的例子：
+
+```tsx
+export function Counter() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <button onClick={() => setCount((value) => value + 1)}>
+      {count}
+    </button>
+  );
+}
+```
+
+Solaris 的公開描述把問題換成「模型在使用者操作時持續產生介面」。為了說明這個差異，可以用一個不代表 Solaris 公開 API 的概念資料結構表示模型邊界：
+
+```ts
+type GeneratedInterfaceState = {
+  instruction: string;
+  inputEvent: {
+    type: "pointer" | "keyboard" | "gesture";
+    payload: unknown;
+  };
+  output: {
+    frame: Uint8Array;
+    stateVersion: number;
+  };
+};
+```
+
+這個模型若要成為可用的軟體執行層，仍需把畫面生成和資料操作分開。帳戶權限、付款、資料庫交易和 audit log 不能只存在於生成畫面；它們必須由可驗證的後端 API 和明確的 policy enforcement 保護。若每次操作都產生不同 DOM 或不同視覺結果，測試框架要改成同時檢查語意、狀態轉移、輸入可重播性和最終畫面。Accessibility tree、鍵盤導覽、國際化文字和低頻寬環境也會成為比 demo 更早遇到的工程問題。
+
+Runway 目前公布的是研究方向和 early access，而非 production contract。官方沒有提供公開 SDK、輸入輸出 schema、延遲 SLA 或模型權重，第三方報導提到的 frame-by-frame、Gen-4.5 延伸與 no-code 定位都應標示為公司說法或媒體轉述。這使得現階段最合理的評估方式是觀察可重現的互動 demo、失敗案例、文字與表格穩定度，以及外部資料來源的整合能力。沒有這些資料，就不能把 Solaris 的研究預覽和一般 web framework 放在相同成熟度比較。
+
+對產品原型，生成式介面可能減少手動切版和元件組合的時間；對長期維護，程式碼、schema、測試和 migration 仍然提供較好的版本控制。未來若 Solaris 或同類系統提供可匯出狀態機、可審查資料契約與 deterministic replay，才有機會進入需要稽核的工作流。這些能力目前尚未在官方公告中承諾，因此應把它視為研究觀察項目。
+
+### 版本動態：修補細節開始直接影響開發流程
+
+Astro 7.2.10 於 8 月 31 日發布，release note 同時處理依賴版本、SSR 和開發伺服器行為。除了修正 `@astrojs/markdown-remark` 被精確 pin 的問題，也修補 minified server build 沒有替換 SSR manifest placeholder、導致啟動時出現 `Invalid URL` 的案例。Windows 上編輯 content collection entry 後的 stale content 也獲得修正，資料 store 現在會在每次寫入後直接通知 dev server，不再只依賴可能漏掉 atomic rename 的 file watcher。[GitHub release](https://github.com/withastro/astro/releases/tag/astro%407.2.10)和[npm package metadata](https://www.npmjs.com/package/astro)都顯示 7.2.10 已在 8 月 31 日更新。
+
+Electron 43.5.0 把修補範圍拉到桌面應用的跨平台邊界。官方 release page 顯示它搭載 Chromium 150.0.7871.250、Node.js 24.19.0 與 V8 15.0.245.31，並修正 Wayland maximized window 還原無效、Linux ARM64 和 ARMv7l 使用 x86 檔案旗標、renderer crash、D-Bus disconnect crash 等問題。效能變更包括降低大型值經由 `ipcRenderer`、`ipcMain` handler 和 `webContents.send` 傳送時的 main-thread 成本，以及改善 ASAR 檔案查找和 Linux 啟動。對使用 Electron 裝載 agent、IDE 或本機 dashboard 的產品，這類修補比表面上的版本號更直接影響穩定性。[Electron release page](https://releases.electronjs.org/release/v43.5.0)與[GitHub tag](https://github.com/electron/electron/releases/tag/v43.5.0)可交叉核對內容。
+
+EAS CLI 23.2.0 把遠端建置除錯做得更接近一般 shell workflow。新版可用 `eas simulator --tag qa`將 simulator session 分組，也把 workflow log 從每 10 秒一次改成即時更新；`eas workflow:ssh`能開啟執行工作所在 worker 的 SSH session，`eas workflow:run --ssh`和 `--ssh-idle-timeout`則能在啟動工作時要求 SSH。這些旗標對 CI 失敗分析很有用，但 SSH 也會擴大 build worker 的操作權限，應在組織 policy 中限制可用的 workflow 與 session 時間。[EAS CLI release](https://github.com/expo/eas-cli/releases/tag/v23.2.0)和[npm metadata](https://www.npmjs.com/package/eas-cli)顯示版本與發布時間一致。
+
+n8n 2.37.6 是 beta，不應直接當作 production stable。GitHub release note 只列出一項核心修正，讓 execution ID 能正確穿過 dynamic-credential storage；n8n 文件則把 2.36.9 列為 stable、2.37.6 列為 beta。這種資料不多的 patch release 仍值得自動化團隊注意，因為 credential context 和 execution tracing 會影響失敗重試、審計和多工作流併發。升級前應在隔離環境驗證 credential resolution、retry、queue worker 和既有 workflow 的 execution metadata。[n8n 2.37.6 release](https://github.com/n8n-io/n8n/releases/tag/n8n%402.37.6)與[n8n release notes](https://docs.n8n.io/changelog/release-notes-2.x)提供版本狀態和變更來源。
+
+Strawberry GraphQL 0.325.0 是小幅但實用的測試工具修補。新版讓 `assert_no_errors`在 GraphQL error 出現時輸出完整錯誤細節，測試失敗不必再另外印出 response 才能找到 resolver 或 validation 的原因。這種變更不改 schema contract，卻能降低 agent 或 CI 產生的測試結果被截斷後難以診斷的情況。[官方 release note](https://github.com/strawberry-graphql/strawberry/releases/tag/0.325.0)把這項變更標為 8 月 30 日發布，並連到對應 pull request。
+
+兩個 agent 工具也在本輪發布新版本。Hermes Agent v0.21.0 的公開 release note 把 cron continuity、subagent live steering、MCP 管理和 browser control 列為重點；OpenClaw 2026.8.1 則列出可搜尋過往對話、cloud worker session、durable progress card、masked credential request 和 exact-operation approval。兩者的共同方向是把 agent 從一次性輸入輸出，推向具備 session state、權限和可恢復工作的執行系統。這類功能的實際品質仍取決於權限範圍、狀態保存、失敗回復和 audit log，而不是功能清單的長度。[Hermes Agent v0.21.0](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.8.31)與[OpenClaw 2026.8.1](https://github.com/openclaw/openclaw/releases/tag/v2026.8.1)的 release notes 都應和實際部署版本分開核對。
+
+## 值得追蹤的版本、RFC 與提案
+
+- [Rails CVE-2026-66066 advisory](https://github.com/rails/rails/security/advisories/GHSA-xr9x-r78c-5hrm)：確認 Rails、libvips、ruby-vips 的實際組合，並完成秘密輪替和 Active Storage 鑑識。
+- [Rails forensic tooling](https://github.com/rails/rails-forensics-CVE-2026-66066)：追蹤 vulnerability window、variant records、object store 證據和工具限制。
+- [NVIDIA NVLink Fusion 官方公告](https://www.mediatek.com/press-room/nvidia-and-mediatek-deepen-long-standing-partnership-to-build-ai-edge-to-cloud-computing-platforms)：留意客製 XPU、NVLink-C2C、NVHBM、MGX 與量產客戶的後續規格。
+- [Runway Solaris](https://runway.com/news/research/introducing-solaris)：追蹤公開 API、可重播狀態、accessibility、後端資料契約和硬體需求是否出現。
+- [Astro 7.2.10](https://github.com/withastro/astro/releases/tag/astro%407.2.10)：核對 SSR manifest、Markdown processor 與 content collection dev server 修補是否影響既有建置。
+- [Electron 43.5.0](https://releases.electronjs.org/release/v43.5.0)：檢查 Chromium、Node.js、Wayland、ARM cross-build 和 IPC 變更。
+- [EAS CLI 23.2.0](https://github.com/expo/eas-cli/releases/tag/v23.2.0)：評估 simulator tag、即時 workflow log 與 worker SSH 的權限政策。
+- [n8n 2.37.6 beta](https://github.com/n8n-io/n8n/releases/tag/n8n%402.37.6)：在升級前比較 stable 2.36.9 和 beta 的 credential execution tracing。
+- [Agent Host Protocol 相關 VS Code 文件](https://code.visualstudio.com/updates/v1_135)：觀察跨應用程式 agent session、protocol 邊界與實驗功能的後續變化。
+
+## 參考來源表
+
+| 主題 | 來源與時間 |
+| --- | --- |
+| Rails 官方漏洞公告 | [Possible arbitrary file read and remote code execution in Active Storage variant processing](https://github.com/rails/rails/security/advisories/GHSA-xr9x-r78c-5hrm)（2026-07-29，免費） |
+| Rails 攻擊細節與鑑識工具 | [rails/rails-forensics-CVE-2026-66066](https://github.com/rails/rails-forensics-CVE-2026-66066)（repository 2026-07-30 建立，免費） |
+| Rails 安全公告討論 | [CVE-2026-66066: Attack details, and tools to perform a forensic investigation](https://discuss.rubyonrails.org/t/cve-2026-66066-attack-details-and-tools-to-perform-a-forensic-investigation/91441)（2026-08-28 後公開細節，免費） |
+| Rails 利用活動報導 | [KindaRails2Shell threatens Ruby on Rails apps](https://www.helpnetsecurity.com/2026/08/03/kindarails2shell-cve-2026-66066-vulnerability/)（原文 2026-08-03，2026-08-31 更新，免費） |
+| Rails 利用活動報導 | [Critical Ruby on Rails Vulnerability in Attackers' Crosshairs](https://www.securityweek.com/critical-ruby-on-rails-vulnerability-in-attackers-crosshairs/)（2026-08-31，免費） |
+| Rails 利用活動報導 | [Critical Rails RCE flaw exploited, patch leaves gap](https://betanews.com/article/rails-cve-2026-66066-exploited/)（2026-08-31，免費） |
+| NVIDIA 與 MediaTek 官方公告 | [NVIDIA and MediaTek Deepen Long-Standing Partnership to Build AI Edge to Cloud Computing Platforms](https://www.mediatek.com/press-room/nvidia-and-mediatek-deepen-long-standing-partnership-to-build-ai-edge-to-cloud-computing-platforms)（2026-08-31，免費） |
+| NVIDIA 與 MediaTek 交易報導 | [Nvidia to invest $3.5 billion in chipmaker MediaTek, expand partnership](https://www.reuters.com/world/asia-pacific/nvidia-invests-35-billion-mediatek-convertible-bonds-2026-08-31/)（2026-08-31，部分內容可能受付費牆限制） |
+| NVIDIA 與 MediaTek 技術分析 | [Nvidia’s $3.5B MediaTek bet reveals its plan for tackling Big Tech's AI chip buildout](https://techcrunch.com/2026/08/31/nvidias-3-5b-mediatek-bet-reveals-its-plan-for-tackling-big-techs-ai-chip-buildout/)（2026-08-31，免費） |
+| NVIDIA 與 MediaTek 交易報導 | [Nvidia invests $3.5 billion in MediaTek convertible bonds](https://asia.nikkei.com/business/electronics/nvidia-invests-3.5-billion-in-mediatek-convertible-bonds)（2026-08-31，部分內容可能受付費牆限制） |
+| Runway 官方公告 | [Introducing Solaris](https://runway.com/news/research/introducing-solaris)（2026-08-31，免費） |
+| Solaris 技術報導 | [Runway says Solaris generates interfaces frame by frame in real time](https://runtimewire.com/article/runway-solaris-interface-world-model-real-time)（2026-08-31，免費） |
+| Solaris 產業報導 | [Runway unveils Solaris, a real-time interactive interface model that generates apps without code](https://cryptobriefing.com/runway-solaris-interactive-interface-model/)（2026-08-31，免費） |
+| Solaris 產業報導 | [Runway's Solaris Turns Any Prompt Into a Functioning Interface, No Code Required](https://glitchwire.com/news/runways-solaris-turns-any-prompt-into-a-functioning-interface-no-code-required/)（2026-08-31，免費） |
+| Astro 版本 | [astro@7.2.10](https://github.com/withastro/astro/releases/tag/astro%407.2.10)（2026-08-31 19:37 UTC，免費） |
+| Astro 套件 metadata | [astro](https://www.npmjs.com/package/astro)（2026-08-31 更新，免費） |
+| Electron 版本 | [v43.5.0](https://releases.electronjs.org/release/v43.5.0)（2026-08-31，免費） |
+| Electron GitHub release | [electron v43.5.0](https://github.com/electron/electron/releases/tag/v43.5.0)（2026-08-31 02:45 UTC，免費） |
+| EAS CLI 版本 | [v23.2.0](https://github.com/expo/eas-cli/releases/tag/v23.2.0)（2026-08-31 20:27 UTC，免費） |
+| EAS CLI 套件 metadata | [eas-cli](https://www.npmjs.com/package/eas-cli)（2026-08-31 20:30 UTC 更新，免費） |
+| n8n 版本 | [n8n@2.37.6](https://github.com/n8n-io/n8n/releases/tag/n8n%402.37.6)（2026-08-31 11:43 UTC，beta，免費） |
+| n8n 版本狀態 | [Release notes 2.x](https://docs.n8n.io/changelog/release-notes-2.x)（2026-09-01 查閱，免費） |
+| Strawberry GraphQL 版本 | [0.325.0](https://github.com/strawberry-graphql/strawberry/releases/tag/0.325.0)（2026-08-30 09:45 UTC，免費） |
+| Hermes Agent 版本 | [Hermes Agent v0.21.0](https://github.com/NousResearch/hermes-agent/releases/tag/v2026.8.31)（2026-08-31 19:29 UTC，免費） |
+| OpenClaw 版本 | [OpenClaw 2026.8.1](https://github.com/openclaw/openclaw/releases/tag/v2026.8.1)（2026-08-31 03:30 UTC，免費） |
+| VS Code 版本彙整 | [GitHub Copilot in VS Code, August 2026 releases](https://github.blog/changelog/2026-08-31-github-copilot-in-vs-code-august-2026-releases/)（2026-08-31，免費） |
+
+## 延伸閱讀方向
+
+- Active Storage 上傳邊界、libvips loader policy 與影像處理隔離
+- CVE 事件中的 secret rotation、session invalidation 與 object store 鑑識
+- 客製 XPU 的 chiplet、HBM、SerDes、C2C 和 rack-scale qualification
+- AI factory 的 collective communication、checkpoint I/O 與異質加速器排程
+- Interface World Model 的 deterministic replay、DOM 語意、accessibility 與後端資料契約
+- Electron 的 context isolation、IPC 大型資料傳輸與 Wayland 跨平台測試
+- EAS workflow worker SSH、build credential 與 CI 最小權限
+- agent session continuity、MCP tool policy、credential masking 與可撤銷 approval
