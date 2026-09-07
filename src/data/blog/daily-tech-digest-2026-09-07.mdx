@@ -1,0 +1,167 @@
+---
+title: "HydraFusion、Lean 形式化與 Magento StyleSmuggler：代理工程進入可驗證階段"
+description: "2026-09-07 技術日報：追蹤 GitHub Copilot HydraFusion 多模型編排、Anthropic 將 Fermat's Last Theorem 轉成 Lean 可檢查專案，以及 Magento/Adobe Commerce StyleSmuggler 零日攻擊。"
+date: 2026-09-07
+tags: ["daily-digest", "ai", "security", "developer-tools", "formal-verification"]
+draft: false
+---
+
+*資料截點：2026-09-07 09:01（Asia/Taipei）。本期事件時間集中於 2026-09-04 至 2026-09-07。*
+
+## 重大頭條
+
+### HydraFusion 把 AI coding agent 的成本控制移到執行策略
+
+GitHub 在 9 月 4 日公開 Project HydraFusion，先以 GitHub Copilot CLI 的 research preview 形式提供。它不是新的 foundation model，而是根據任務決定要使用單一模型、先便宜後升級的 cascade，或由一個模型產生草稿、另一個模型在隔離環境中 review 後再修訂的 critique workflow。[GitHub 公告](https://www.linkedin.com/posts/github_49-percentage-points-higher-verified-task-activity-7501672533218447360-aBg-)、[VentureBeat 報導](https://venturebeat.com/orchestration/githubs-hydrafusion-cuts-ai-coding-costs-in-every-benchmark-it-only-matches-quality-in-one)與[IT Brief 說明](https://itbrief.news/story/github-launches-hydrafusion-preview-for-copilot-coding)交叉確認了 research preview、Copilot CLI 與三種執行模式。
+
+GitHub 公布的離線測試在 TerminalBench 2.1、DeepSWE 與 CheckpointBench 比較 HydraFusion、Claude Opus 5 和 GPT-5.6 Sol。相較 Claude Opus 5，TerminalBench 2.1 的 verified task quality 高 4.9 個百分點，估算成本低 67%；DeepSWE 成本低 36%，品質低 1.5 個百分點；CheckpointBench 成本低 65%，品質低 0.1 個百分點。[VentureBeat 的分析](https://venturebeat.com/orchestration/githubs-hydrafusion-cuts-ai-coding-costs-in-every-benchmark-it-only-matches-quality-in-one)指出，成本在三個測試都下降，但品質只在其中一個測試超過基準。這是重要限制，因為「成本下降」不能直接改寫成「品質相同」。
+
+對工程團隊而言，模型選擇開始和 workflow orchestration 綁在一起。HydraFusion 目前以 Copilot CLI 的 `/experimental` 功能提供，第一版較適合 first-turn、single-prompt 任務，長時間多輪除錯仍在研究中。用量依實際呼叫的模型分別計費，cascade、critique、retry 與 escalation 都會進入成本。企業評估 coding agent 時，應同時記錄完成率、重試、延遲、每個 workflow 的總成本，以及不同任務類型的品質，而不能只看最便宜的一次模型呼叫。
+
+### Claude 的 Fermat 形式化工作，重點是可重播的證明工件
+
+Anthropic 在 9 月 4 日公開 Fermat's Last Theorem 的完整 Lean 形式化。這不是重新發現定理，因為 Andrew Wiles 與 Richard Taylor 在 1990 年代已完成數學證明；新的部分是把既有證明路線轉成可由 proof assistant 檢查的軟體專案。Anthropic 表示，Claude 在 11 天內產生約 1,300 萬行 Lean、沿途證明 30,300 個 theorem，最後的依賴樹使用約 29,500 個 theorem。[Anthropic 研究文章](https://www.anthropic.com/research/formalizing-fermats-last-theorem)、[公開 repository](https://github.com/anthropics/fermats-last-theorem)與[AI Weekly 的獨立報導](https://aiweekly.co/alerts/anthropics-claude-formalizes-fermats-last-theorem-in-lean)提供了相同事件的不同角度。
+
+repository 把 Lean 4.33.1 和 Mathlib `v4.33.0` 固定下來，並把 `FinalCheck.lean` 放在預設建置路徑。README 說明，完整建置會檢查 60,475 個 module，最終定理只允許 Lean 的三個標準 axiom，禁止 `sorry`、額外 `axiom`、`native_decide` 和未受控的執行碼。repository 也提供 comparator 與 Rust 撰寫的 nanoda 第二核心檢查器，這讓讀者可以清楚知道「已驗證」涵蓋哪個 statement、哪個 toolchain，以及哪些 trust boundary。
+
+這件事對一般軟體工程的價值不在於要求團隊改用 Lean，而在於改變 agent 產物的驗收標準。模型輸出一段看似合理的說明，不等於結果可以重播；固定版本、可失敗的 final check、完整的依賴圖和清楚的禁止項目，才是可以交給 CI 的證據。Anthropic 的 companion PDF 也明確說明，形式化工作大量使用既有的 Imperial College London FLT project、flt-regular 與 Mathlib，AI 產生的是在這些基礎上的大型可檢查實作，而不是脫離既有數學文獻的全新定理。[Lean 形式化 companion PDF](https://www-cdn.anthropic.com/9e431dff043da6538d99d6c2d231b670aa3da263.pdf)保留了執行時間線與驗證邊界。
+
+### StyleSmuggler 零日正在攻擊 Magento，修補狀態不是安全保證
+
+Sansec 在 9 月 5 日公開 StyleSmuggler，描述一個尚未有官方修補程式的 Magento Open Source 與 Adobe Commerce zero-day。Sansec 表示攻擊從 9 月 4 日開始，未驗證的請求可以把 PHP 程式碼寫入 Magento 自己產生的檔案，再透過 failed payment email 的渲染流程觸發執行。[Sansec 威脅研究](https://sansec.io/research/stylesmuggler)、[CybersecurityNews 報導](https://cybersecuritynews.com/magento-and-adobe-commerce-0-day-rce/)與[Abijita 的獨立整理](https://www.abijita.com/magento-stylesmuggler-zero-day-active-exploitation/)都確認了 active exploitation、無需登入和尚無官方 patch 的狀態。
+
+Sansec 在乾淨環境重現 Magento Open Source 2.4.7、2.4.8 和 2.4.9 的攻擊鏈，並指出第一個受害站使用了 2.4.6-p15 以及當時可取得的 7 月、8 月安全更新。這不表示所有 Adobe Commerce 版本都已確認受影響。Abijita 引述 Sansec 說明，Sansec 尚未在 Adobe Commerce 或 Adobe Commerce on Cloud 重現完整鏈條，Adobe 也尚未確認產品範圍。因此目前應把「所有 current versions 受影響」視為 Sansec 對 Magento 與 Adobe Commerce 的緊急警告，同時保留產品範圍仍待供應商確認的註記。
+
+在官方修補前，Sansec 建議不使用 GraphQL 的商店暫時停用 GraphQL。這不是完整修補，因為 headless 或 PWA storefront 可能依賴 GraphQL，停用會直接影響功能。Disrex 對兩個遭入侵的商店進行分析，發現惡意 Rust binary 可能偽裝成 `[kworker/u:8:0]`，放在網站 document root 之外，以 cron 每五分鐘重新啟動，並透過本機 Redis 讀取 session。管理者應先保留證據，再處理 cron、程序、session 與憑證輪替，不能只升級到目前最新的 Magento 版本後就視為結案。
+
+## 快速重點
+
+- [HydraFusion](https://www.linkedin.com/posts/github_49-percentage-points-higher-verified-task-activity-7501672533218447360-aBg-) 已在 GitHub Copilot CLI 以 research preview 形式提供，所有 Copilot plan 可透過 `/experimental` 嘗試。
+- [HydraFusion 的執行模式](https://itbrief.news/story/github-launches-hydrafusion-preview-for-copilot-coding)包含 single、cascade 和 critique，review model 在隔離且唯讀的環境中工作。
+- [HydraFusion 的 benchmark](https://venturebeat.com/orchestration/githubs-hydrafusion-cuts-ai-coding-costs-in-every-benchmark-it-only-matches-quality-in-one)顯示成本在三項測試都下降，但品質只在 TerminalBench 2.1 超過 Claude Opus 5。
+- [HydraFusion 的限制](https://saassentinel.com/2026/09/06/githubs-hydrafusion-routes-ai-coding-tasks-across-multiple-models-to-cut-costs-by-up-to-67/)包括 first-turn、single-prompt 定位，以及依每個底層模型的 token 用量計費。
+- [Anthropic 的 FLT 文章](https://www.anthropic.com/research/formalizing-fermats-last-theorem)談的是既有數學證明的 Lean 形式化，不是新的 Fermat proof discovery。
+- [FLT repository](https://github.com/anthropics/fermats-last-theorem)固定 Lean 4.33.1 與 Mathlib `v4.33.0`，並把 final theorem 寫成可由 Lean kernel replay 的檢查目標。
+- [repository 的驗證說明](https://github.com/anthropics/fermats-last-theorem)要求沒有 `sorry`、額外 `axiom`、`native_decide`、`unsafe` 或 `extern`。
+- [Sansec 的 StyleSmuggler 時間線](https://sansec.io/research/stylesmuggler)記錄攻擊從 9 月 4 日開始，9 月 5 日公開研究與緊急防護規則。
+- [Magento zero-day 報導](https://www.abijita.com/magento-stylesmuggler-zero-day-active-exploitation/)指出，已有兩個 Magento Open Source 商店被 Disrex 分析為遭入侵，正常的 patch status 沒有阻止攻擊。
+- [Adobe Commerce 狀態整理](https://cybersecuritynews.com/magento-and-adobe-commerce-0-day-rce/)顯示，截至 9 月 6 日尚無 CVE、官方 advisory、patch 或 workaround。
+- [Sansec 的臨時建議](https://sansec.io/research/stylesmuggler)是停用不必要的 GraphQL，並檢查可疑的 `[kworker/u:8:0]`、`.gvfsd`、cron 和 Magento log。
+- [Create Hosting 的客戶公告](https://www.createhosting.co.nz/support/announcements/111/Critical-Security-Vulnerability-StyleSmuggler---Adobe-Commerce-or-Magento-Open-Source.html)提醒，edge-level protection 可以先擋已知攻擊樣式，但仍不能取代 Adobe 的正式修補。
+
+## 細節說明
+
+### HydraFusion 的單一模型選擇，變成整段 workflow 選擇
+
+GitHub 既有的 Auto model selection 主要回答「哪一個模型適合這個任務」。HydraFusion 把問題改成「這個任務需要哪一種執行方式」。簡單任務可以直接交給 single workflow；有品質門檻的任務先由較低成本模型產生結果，未達標才升級到較強模型；需要第二意見的任務則使用 critique workflow。這種設計把額外模型呼叫變成條件式成本，而不是所有請求都固定走最貴的模型。
+
+GitHub 對 HydraFusion 的實際操作說明仍屬 research preview。公開的操作步驟是先更新 Copilot CLI，開啟 experimental features，再從 model picker 選擇 HydraFusion。[操作步驟整理](https://wccpress.com/project-hydrafusion-frontier-quality-via-multi-model-orchestration)中的命令如下：
+
+```bash
+/update
+/experimental on
+/model
+```
+
+上面的命令是 preview workflow，不是穩定 API。企業若要做內部試驗，應把每次路由決策、呼叫的模型、輸入輸出 token、retry、quality gate 結果與最終 patch 一起寫入 telemetry。可以先用自己的 policy 資料結構表達驗證需求，但不要把它誤認為 GitHub 公開的 SDK schema：
+
+```ts
+type ExecutionPlan =
+  | { kind: "single"; solver: string }
+  | { kind: "cascade"; draftModel: string; escalationModel: string }
+  | { kind: "critique"; draftModel: string; reviewerModel: string };
+
+type AgentRun = {
+  plan: ExecutionPlan;
+  taskClass: "edit" | "debug" | "review" | "test";
+  qualityGate: "pass" | "escalate";
+  totalTokens: number;
+  totalCostUsd: number;
+  finalChangeSet: string;
+};
+```
+
+這個結構把「路由決策」和「完成結果」分開，方便比較 workflow 的總成本。它也暴露 HydraFusion 目前最需要外部驗證的地方。GitHub 的 benchmark 是離線測試，模型池、價格、reasoning level、benchmark 版本和執行限制都會影響結果。DeepSWE 品質低於 Claude Opus 5 的數字提醒工程團隊，跨檔案修改和長流程除錯不能只用 TerminalBench 的結果推估。
+
+### Lean 專案把 agent 的答案變成可失敗的建置產物
+
+Anthropic 的 release 最有用的技術細節在 repository，而不是宣傳用的模型敘事。預設的 `FinalCheck.lean` 會直接檢查 theorem 的 axioms。repository 中的 theorem statement 是：
+
+```lean
+theorem fermat_last_theorem
+    (n : ℕ) (hn : 3 ≤ n)
+    (a b c : ℕ)
+    (ha : 0 < a) (hb : 0 < b) (hc : 0 < c) :
+    a ^ n + b ^ n ≠ c ^ n
+```
+
+最後的檢查則要求 Lean 列出的依賴只有三個標準 axiom：
+
+```lean
+#print axioms fermat_last_theorem
+-- [propext, Classical.choice, Quot.sound]
+```
+
+這種 final check 和一般軟體專案的 regression test 有相似的工程角色。它不是重新解釋 proof 的每一個數學步驟，而是把不允許的捷徑變成 build failure。repository 還用 comparator 重放整個環境，並用 nanoda 驗證匯出的 declaration；這些檢查降低了單一 checker 出錯時的風險，但不能消除對 Lean kernel、Mathlib 定義與形式化 statement 本身的信任。
+
+程式碼量也需要正確解讀。Anthropic 文章提到約 1,300 萬行 Lean 和 30,300 個沿途 theorem，repository 則列出最終依賴樹的 29,511 個 theorem、1,450 個 definition module，以及約 60,475 個建置 module。這些數字描述的是大型形式化工件和其驗證成本，不是 Claude 發現了 30,000 個新的數學定理。開發工具團隊可以採用同一個原則，讓 generated migration、agent patch 和 benchmark 結果都帶有固定版本、可重播命令與會在違規時失敗的 final gate。
+
+### StyleSmuggler 的防守重點是隔離、取證與輪替
+
+StyleSmuggler 的已知流程包含兩個階段。第一階段利用 GraphQL 請求中的 `styles` properties 讓 Magento 把惡意內容寫進自己的檔案；第二階段觸發標準的 Payment Transaction Failed Reminder email，讓 Magento 在產生 email 時處理已被污染的內容。攻擊者不需要登入，也不需要有人打開那封 email。Sansec 尚未公開完整 gadget chain，因此文章只保留防守所需的高層機制，不重現可用的 exploit payload。
+
+在沒有官方修補程式的短期窗口，管理者可以依照商店功能選擇 edge-level containment。若 storefront 不需要 GraphQL，可在 WAF 或 Nginx 暫時拒絕 endpoint；若 storefront 依賴 GraphQL，則不應直接套用這條規則，而要先使用 Sansec、Disrex 或受信任的 Magento 維運商提供的 hardening。下面是防守性示意，不是 Magento 官方設定，套用前必須在 staging 驗證：
+
+```nginx
+# Temporary containment only. Use only when the storefront does not need GraphQL.
+location = /graphql {
+    return 403;
+}
+```
+
+伺服器層也可以暫時限制 PHP 產生子程序的能力。Disrex 建議停用 `proc_open`，並將 `/tmp`、`/var/tmp`、`/dev/shm` 以 `noexec` 掛載。這些設定可能影響正常工作流，不能當作永久修補。已知入侵的商店應先保留 cron、程序、檔案與 log 證據，再停止持久化機制，避免直接重開機或執行會覆寫檔案時間戳的 Composer 操作。
+
+```ini
+; Temporary containment in the PHP runtime used by the store.
+; Verify application compatibility before enabling.
+disable_functions = proc_open
+```
+
+取證時不要只查 website document root。Abijita 引述 Disrex 的分析指出，惡意 binary 可能在 `~/.local/share/.gvfsd/gvfsd-user`，而感染痕跡也可能出現在 `var/report/` 或 `var/log/system.log`。應比對磁碟上的檔案與 `/proc/<pid>/exe` 指向的執行檔，檢查可疑的 `[kworker/u:8:0]` 是否由一般網站使用者執行，再輪替 Magento `crypt/key`、管理者密碼、付款服務金鑰與其他 integration credential。恢復服務前，還要確認 session storage 已清除，並把 Adobe 正式 bulletin 的內容納入變更紀錄。
+
+## 值得追蹤的版本、RFC 與提案
+
+- [HydraFusion research preview](https://www.linkedin.com/posts/github_49-percentage-points-higher-verified-task-activity-7501672533218447360-aBg-)：追蹤 multi-turn workflow、可觀測性、模型池變動、取消與 timeout 行為，以及 preview 是否進入穩定產品。
+- [Fermat's Last Theorem in Lean 4](https://github.com/anthropics/fermats-last-theorem)：追蹤 Lean 4.33.1、Mathlib `v4.33.0`、comparator 與 nanoda 的可重播建置，並確認未來是否能以更小的工件整合回 Mathlib。
+- [StyleSmuggler Sansec advisory](https://sansec.io/research/stylesmuggler)：追蹤 Adobe 9 月 8 日 security bulletin、CVE 指派、正式修補版本，以及 Sansec 對完整 gadget chain 和 detection rule 的後續更新。
+- [Magento GraphQL API 文件](https://developer.adobe.com/commerce/webapi/graphql/)：評估停用 GraphQL 對 headless storefront、PWA 和第三方整合的實際影響。
+- [GitHub Copilot CLI cost study](https://github.blog/ai-and-ml/github-copilot/how-we-make-ai-coding-more-cost-efficient-without-sacrificing-task-quality/)：追蹤 task-level cost、tool output compression、prompt regression test 與 agent workflow 的線上實驗方法。
+
+## 參考來源表
+
+| 主題 | 來源與日期 | 來源類型 |
+| --- | --- | --- |
+| Project HydraFusion 公告 | [4.9 percentage points higher verified task quality. 67% lower estimated cost.](https://www.linkedin.com/posts/github_49-percentage-points-higher-verified-task-activity-7501672533218447360-aBg-)（2026-09-04，免費） | GitHub 官方社群公告 |
+| HydraFusion benchmark 分析 | [GitHub's HydraFusion cuts AI coding costs in every benchmark. It only matches quality in one.](https://venturebeat.com/orchestration/githubs-hydrafusion-cuts-ai-coding-costs-in-every-benchmark-it-only-matches-quality-in-one)（2026-09-04，免費） | VentureBeat 報導 |
+| HydraFusion workflow 與權限邊界 | [GitHub launches HydraFusion preview for Copilot coding](https://itbrief.news/story/github-launches-hydrafusion-preview-for-copilot-coding)（2026-09-06，免費） | IT Brief 報導 |
+| HydraFusion 成本與模型路由 | [GitHub's HydraFusion Routes AI Coding Tasks Across Multiple Models to Cut Costs by Up to 67%](https://saassentinel.com/2026/09/06/githubs-hydrafusion-routes-ai-coding-tasks-across-multiple-models-to-cut-costs-by-up-to-67/)（2026-09-06，免費） | SaaS Sentinel 報導 |
+| HydraFusion CLI 操作步驟 | [Project HydraFusion: Frontier quality via multi-model orchestration](https://wccpress.com/project-hydrafusion-frontier-quality-via-multi-model-orchestration)（2026-09-04，免費） | 操作整理 |
+| FLT 形式化發布 | [Formalizing Fermat's Last Theorem](https://www.anthropic.com/research/formalizing-fermats-last-theorem)（2026-09-04，免費） | Anthropic 官方研究文章 |
+| FLT Lean repository | [anthropics/fermats-last-theorem](https://github.com/anthropics/fermats-last-theorem)（2026-09-04，免費） | GitHub 原始碼與建置說明 |
+| FLT companion 文件 | [Formalizing Fermat's Last Theorem in Lean](https://www-cdn.anthropic.com/9e431dff043da6538d99d6c2d231b670aa3da263.pdf)（2026-09-04，免費） | Anthropic PDF |
+| FLT 獨立報導 | [Anthropic's Claude Formalizes Fermat's Last Theorem in Lean](https://aiweekly.co/alerts/anthropics-claude-formalizes-fermats-last-theorem-in-lean)（2026-09-04，更新 2026-09-05，免費） | AI Weekly 報導 |
+| FLT 開發者角度 | [Anthropic's Fermat Proof Is an Autoformalization Milestone](https://www.developersdigest.tech/blog/anthropic-fermat-lean-autoformalization-2026)（2026-09-05，免費） | Developers Digest 分析 |
+| StyleSmuggler 原始披露 | [StyleSmuggler: Magento and Adobe Commerce 0-day RCE under active attack](https://sansec.io/research/stylesmuggler)（2026-09-05，免費） | Sansec 威脅研究 |
+| StyleSmuggler 事件報導 | [Hackers Actively Exploiting Magento and Adobe Commerce 0-Day RCE Vulnerability](https://cybersecuritynews.com/magento-and-adobe-commerce-0-day-rce/)（2026-09-06，免費） | CybersecurityNews 報導 |
+| StyleSmuggler 取證細節 | [Magento Zero-Day Under Active Attack With No Patch Available](https://www.abijita.com/magento-stylesmuggler-zero-day-active-exploitation/)（2026-09-06，免費） | Abijita 報導 |
+| StyleSmuggler 維運公告 | [Critical Security Vulnerability (StyleSmuggler) - Adobe Commerce / Magento Open Source](https://www.createhosting.co.nz/support/announcements/111/Critical-Security-Vulnerability-StyleSmuggler---Adobe-Commerce-or-Magento-Open-Source.html)（2026-09-06，免費） | Hosting 業者公告 |
+| Magento GraphQL 文件 | [GraphQL](https://developer.adobe.com/commerce/webapi/graphql/)（查閱 2026-09-07，免費） | Adobe 官方文件 |
+
+## 延伸閱讀方向
+
+- agent routing 的 quality gate、workflow cost、取消與可觀測性
+- Lean kernel、Mathlib、proof artifact 與第二核心驗證
+- generated code 的 final check、dependency pinning 與可重播 CI
+- Magento GraphQL、headless storefront 與 emergency containment
+- web application zero-day 的取證保全、session invalidation 與 credential rotation
+- PHP `disable_functions`、Linux `noexec` 與共享主機隔離
