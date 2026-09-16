@@ -1,0 +1,159 @@
+---
+title: "即時語音、桌面代理與彈性資料庫：2026-09-16 技術日報"
+description: "2026-09-16 技術日報：Google 發布 Gemini 3.8 Live，Cline 推出可管理多個代理工作的 Desktop beta，Cockroach Labs 發布以虛擬叢集與分離式儲存支援代理型資料庫工作負載的 Continuum。"
+date: 2026-09-16
+tags: ["daily-digest", "ai", "developer-tools", "voice-ai", "databases", "infrastructure"]
+draft: false
+---
+
+*資料截點：2026-09-16 09:01（Asia/Taipei）。本期只納入 2026-09-13 09:01 至 2026-09-16 09:01 的新事件。*
+
+## 重大頭條
+
+### Gemini 3.8 Live 把背景工具呼叫帶進即時語音代理
+
+Google 在 9 月 15 日發布 [Gemini 3.8 Live 與 Gemini 3.8 Live Extended Thinking](https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-3-8-live-gemini-3-8-live-extended-thinking/)，並在開發者文章 [Build real-time voice applications with Gemini 3.8 Live and 3.5 Transcribe](https://blog.google/innovation-and-ai/technology/developers-tools/build-real-time-voice-applications-gemini-audio/)中說明 Gemini API 與 Google AI Studio 的供應狀態。[9to5Google](https://9to5google.com/2026/09/15/gemini-3-8-live-announced/)確認 Extended Thinking 版本會進入 Gemini Live、Gmail、Docs 與 Keep。[The Decoder](https://the-decoder.com/google-launches-gemini-3-8-live-to-take-on-openais-gpt-live-1-at-a-fraction-of-the-cost/)與 [SiliconANGLE](https://siliconangle.com/2026/09/15/googles-new-speech-model-gemini-3-8-live-supports-real-time-reasoning/)則分別交叉報導價格、背景 API 呼叫與 benchmark 數字。
+
+**為何重要。** 這次發布的核心不是把文字模型改成能朗讀，而是讓語音對話、視覺輸入、推理和工具執行在同一個持續連線中並行。Google 宣稱模型能在背景執行 API 或工具呼叫，對話仍可繼續，並能在 97 種語言之間自動切換。開發者文章列出的價格是音訊輸入每分鐘 0.005 美元、音訊輸出每分鐘 0.018 美元。Extended Thinking 的 82.6 分 Speech to Speech Quality Index、68.6% 的 τ-Voice、35.1% 的 Sierra τ-Voice-banking，以及 97.7% 的 Big Bench Audio 都是 Google 引用的結果，不能當成獨立重現的測量。更值得留意的是，Google 的一般 [Live API 文件](https://ai.google.dev/gemini-api/docs/live)在本期截點仍標示 Preview，技術規格與模型比較頁也尚未完全跟上 3.8 公告，正式導入前必須再次核對帳號可用的 model ID 與功能矩陣。
+
+### Cline Desktop 把代理工作從編輯器側欄移到獨立工作區
+
+[Cline 的官方公告](https://cline.bot/blog/cline-desktop-an-open-source-app-for-open-weight-models)在 9 月 14 日發布 Cline Desktop 早期版，提供 macOS 與 Windows beta。官方表示，Desktop 沿用 Cline SDK 與既有 agent harness，支援平行工作階段、排程工作、Marketplace，以及從 Claude Code 和 Codex 匯入任務。[RuntimeWire](https://runtimewire.com/article/cline-launches-desktop-coding-agent-open-weight-models)報導其可連接外部 API provider、local model，並將排程的 PR review、弱點掃描與文件更新放在同一個工作區。[TheNextGenTechInsider](https://thenextgentechinsider.com/pulse/cline-launches-desktop-workspace-for-parallel-ai-agent-management-and-open-weight-models)也報導平行代理、MCP server 與 skills Marketplace，並指出 Cline Desktop 仍處於早期階段。
+
+**為何重要。** Cline 原本主要存在於 VS Code extension 與 CLI，Desktop 讓工作階段、模型選擇和週期性工作變成產品本身的一級功能。官方列出的選項包括透過 Cline provider 使用 300 多個模型、連接 50 多個 provider、自帶 API key、使用 local model，以及讓 Plan 與 Act 使用不同模型。匯入功能可以保留既有對話脈絡，再用另一個 provider 或 open-weight model 繼續處理。Schedule 則會把 prompt、workspace、provider、model 和頻率綁在一起，讓代理定期讀取或修改指定專案。這種設計提高了工作移轉的彈性，也把權限隔離、排程執行時可見的檔案和 MCP 工具列入日常維運問題。官方列出的 Terminal-Bench 2.0 數字是 Cline CLI 的 pass@1 結果，不是 Desktop 的獨立評測，不能直接拿來推導 Desktop 的效能。
+
+### Cockroach Continuum 將資料庫管理單位改成整個 estate
+
+[Cockroach Labs 的發布文章](https://www.cockroachlabs.com/blog/continuum-announcement/)與 [Inside Cockroach Continuum: Elastic Infrastructure for Agentic Database Estates](https://www.cockroachlabs.com/blog/continuum-architecture/)都在 9 月 15 日公開，主張以 private virtual clusters、共享實體主機與分離式儲存承接大量代理型應用。[CIO](https://www.cio.com/article/4222231/cockroach-labs-bets-on-database-pooling-to-cut-cost-of-ai-era-workloads-2.html)指出，節省幅度取決於資料庫 fleet 是否長時間閒置，也提出隔離、效能可預測性與除錯的疑問。[Tiatra](https://tiatra.com/cockroach-labs-bets-on-database-pooling-to-cut-cost-of-ai-era-workloads/)則交叉整理 Continuum、Plenum 和 Aegis 三個部分，以及自動調整 compute 尚未在發布時提供的限制。
+
+**為何重要。** 代理型應用常常建立很多短命、突發且彼此隔離的資料庫，傳統按單一 cluster 預留 peak capacity 的做法會留下大量閒置資源。Continuum 的做法是讓每個工作負載保有自己的虛擬 CockroachDB cluster，同時把多個虛擬 cluster 放進共享 private host pool。Plenum 將 durable storage 與 KV compute 分開，新增 KV node 時以 metadata link 取得資料，不必先複製整批檔案。Aegis 在發布時是 advisory，會讀取 slow-query logs、提出索引或 schema 建議，但仍由人員核准動作。Cockroach Labs 自述 Plenum 可讓儲存成本降低超過 70%，並舉出將查詢延遲從 850 毫秒降至 12 毫秒的案例，這些數字仍應視為 vendor-reported results。外部報導提醒，共享基礎設施會把成本預估、工作負載隔離和故障定位帶進同一個設計問題，不能只看 idle capacity 是否下降。
+
+## 快速重點
+
+- [Google 官方公告](https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-3-8-live-gemini-3-8-live-extended-thinking/)表示 Gemini 3.8 Live 與 Extended Thinking 已開始在 Gemini API 與 Google AI Studio rollout。
+- [Google 開發者文章](https://blog.google/innovation-and-ai/technology/developers-tools/build-real-time-voice-applications-gemini-audio/)列出 Gemini 3.8 Live 的音訊輸入每分鐘 0.005 美元、音訊輸出每分鐘 0.018 美元。
+- [9to5Google](https://9to5google.com/2026/09/15/gemini-3-8-live-announced/)報導 Extended Thinking 會用於 Gmail Live、Docs Live、Keep Live 與 Gemini Live。
+- [SiliconANGLE](https://siliconangle.com/2026/09/15/googles-new-speech-model-gemini-3-8-live-supports-real-time-reasoning/)整理 Google 宣稱的 82.6、68.6%、35.1% 與 97.7% benchmark 結果，並提醒這些是公司引用的數字。
+- [Gemini Live API 文件](https://ai.google.dev/gemini-api/docs/live)目前仍將 Live API 標示為 Preview，並要求輸入 raw 16-bit PCM、16 kHz 音訊，輸出 raw 16-bit PCM、24 kHz 音訊。
+- [Cline 官方公告](https://cline.bot/blog/cline-desktop-an-open-source-app-for-open-weight-models)表示 Desktop beta 支援平行工作階段、排程任務、300 多個模型，以及從 Claude Code 和 Codex 匯入任務。
+- [RuntimeWire](https://runtimewire.com/article/cline-launches-desktop-coding-agent-open-weight-models)報導 Cline Desktop 可在 macOS 與 Windows 執行，並支援 local model、外部 provider 與排程的 PR review、安全掃描和文件更新。
+- [Cline 官方 benchmark 表](https://cline.bot/blog/cline-desktop-an-open-source-app-for-open-weight-models)列出 Kimi K3 在 Cline CLI 的 Terminal-Bench 2.0 pass@1 為 82.02%，但該數字不是 Desktop 評測。
+- [TheNextGenTechInsider](https://thenextgentechinsider.com/pulse/cline-launches-desktop-workspace-for-parallel-ai-agent-management-and-open-weight-models)指出 Desktop 的 Marketplace 涵蓋 agent plugin、MCP server 與 skills；官方尚未在公告中公布排程或 Marketplace 的完整設定 schema。
+- [Cockroach Labs](https://www.cockroachlabs.com/blog/continuum-announcement/)表示 Continuum 以 database estate 而不是單一 cluster 作為管理單位，並提供 private virtual clusters。
+- [Continuum architecture 文章](https://www.cockroachlabs.com/blog/continuum-architecture/)說明 Plenum 讓 durable storage 與 KV compute 獨立擴縮，並以 Range Shared LSM 避免新節點啟動時複製整批檔案。
+- [CIO](https://www.cio.com/article/4222231/cockroach-labs-bets-on-database-pooling-to-cut-cost-of-ai-era-workloads-2.html)提醒，Continuum 的成本效益取決於 workload 的使用率，shared environment 也會增加 isolation、debugging 與成本預測的難度。
+
+## 細節說明
+
+### Live API 的差異在持續連線與非同步工作
+
+Google 的開發者文章把 Gemini 3.8 Live 定位成 native speech-to-speech model，而不是把語音辨識、文字推理和語音合成拆成三個服務。[官方 Live API overview](https://ai.google.dev/gemini-api/docs/live)則將介面定義成有狀態的 WSS WebSocket，輸入可包含音訊、JPEG 影像與文字。文件指定音訊輸入是 little-endian 的 16-bit PCM，原生取樣率為 16 kHz，輸出是 24 kHz。這些格式條件直接影響瀏覽器或手機端的 audio pipeline，不能把任意 compressed audio bytes 當成 PCM chunk 送出。Client-to-server 模式可以繞過後端轉送串流，但 Google 文件建議 production 使用 ephemeral token，避免把長期 API key 放在用戶端。
+
+以下程式碼保留 Google Live API guide 目前公開的 JavaScript 連線範例與音訊格式。文件在本期截點示範的 model string 是 gemini-3.1-flash-live-preview，Google 9 月 15 日的 3.8 公告頁面沒有列出 3.8 的 literal model ID，因此正式環境應先確認帳號的模型清單，再以環境變數替換。這個差異不只是文件排版問題，因為 [Live API capabilities guide](https://ai.google.dev/gemini-api/docs/live-guide)對不同 Live model 的 thinking、非同步 function calling 與 proactive audio 支援有明確區分。
+
+```javascript
+import { GoogleGenAI, Modality } from "@google/genai";
+
+const ai = new GoogleGenAI({});
+const model = process.env.GEMINI_LIVE_MODEL ?? "gemini-3.1-flash-live-preview";
+const config = { responseModalities: [Modality.AUDIO] };
+
+const session = await ai.live.connect({
+  model,
+  config,
+  callbacks: {
+    onopen: () => console.debug("Live API connected"),
+    onmessage: (message) => console.debug(message),
+    onerror: (error) => console.error(error.message),
+    onclose: (event) => console.debug(event.reason),
+  },
+});
+
+function sendPcmChunk(chunk) {
+  session.sendRealtimeInput({
+    audio: {
+      data: chunk.toString("base64"),
+      mimeType: "audio/pcm;rate=16000",
+    },
+  });
+}
+
+process.on("SIGINT", () => session.close());
+```
+
+程式碼的重點是 session state，而不是單次 HTTP request。應用程式需要處理連線關閉、音訊 chunk 的節奏、輸出 audio buffer、使用者插話和 tool response 的生命週期。Google 公告說 3.8 可以在對話繼續時執行背景 API 呼叫，但通用 guide 的 model comparison 又顯示 3.1 Flash Live 不支援 NON_BLOCKING function calling，兩者不能直接混用。團隊應把 model capability 當成可測試的設定，而不是把新模型的宣傳文字套用到所有 Live endpoint。Benchmark 也應連同音訊語言、延遲、插話率、工具成功率和每分鐘成本一起記錄，否則 82.6 分無法回答產品是否適合實際通話。
+
+### Cline 的價值在共用 harness，而不只是多一個視窗
+
+Cline 官方說 Desktop、extension 與 CLI 共用同一套 Cline harness，模型選擇只是其中一層。harness 負責工具發現、context management、錯誤處理、Plan 與 Act 的工作分界，以及不同工作階段如何延續。官方公告也說 Cline SDK 重寫了 prompt、agent loop、context management 和 error handling，這些是產品行為的基礎，不等於模型本身的 benchmark。RuntimeWire 進一步報導 Desktop 使用 Tauri app、Bun sidecar 和 Next.js interface，這是外部報導整理的實作資訊，仍應以 [Cline open-source repository](https://github.com/cline/cline)的實際程式碼為準。
+
+Desktop 的匯入功能解決的是工作脈絡的可攜性。使用者可以把 Claude Code、Codex 或其他支援的 coding agent 對話帶入，再用不同 provider 或 model 接續。這讓模型替換從「重新描述整個問題」變成「檢查既有歷史後繼續」，但也帶來 prompt、工具權限與原始對話中敏感資料的移轉風險。匯入前應刪除 token、內部 URL、客戶資料和不應傳給新 provider 的檔案內容。若 agent 會修改工作區，還應把匯入的歷史視為不可信的工作脈絡，而不是自動授權。
+
+Schedule 則把代理執行變成週期性工作。官方舉的例子包含早上的 PR review、夜間 repo check 和每週文件更新，這些工作都可能讀取分支、執行命令或呼叫 MCP server。排程檔案需要明確記錄 workspace、provider、model、允許的工具、輸出位置和失敗通知，否則「每天執行一次」不足以讓維運人員稽核實際權限。Cline 公告只確認 Marketplace 可管理 plugin、MCP server 和 skills，沒有公布 Desktop 的完整匯入 schema，因此下面的 JSON 只示範常見的 MCP stdio 設定佈局，不代表 Cline Desktop 的官方設定檔格式。
+
+```json
+{
+  "mcpServers": {
+    "repo-scope": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/workspace/repo"
+      ]
+    }
+  }
+}
+```
+
+這種設定只限制 server 可接觸的路徑，不能自動保證唯讀，也不能替代作業系統權限。要執行夜間安全掃描，應另外建立沒有雲端憑證、沒有部署權限的工作區，並把結果寫到專用目錄。Cline 的 Terminal-Bench 表格很適合比較「同一模型換 harness」的差異，但表格是 Cline CLI 的 pass@1 結果，且官方說數字重現自 9 月 2 日的 harness upgrade post。它不能證明 Desktop beta 在不同硬體、不同 provider 或平行工作階段下會有相同結果。
+
+### Continuum 將資料庫擴縮問題改成 estate 排程問題
+
+Cockroach Continuum 的基本單位是虛擬 cluster。官方架構文章描述，數千個彼此隔離的 virtual clusters 可以放在共享 private physical host clusters 上，讓 database-per-tenant 模式不必為每個 tenant 準備一組實體 fleet。這個模型針對的是代理建立大量應用、工作量短暫且尖峰不容易預測的情境。它沒有改掉 SQL、KV、range replication 與 Raft consensus 的基本語意，而是把 SQL、KV 和 storage 層的伸縮方式拆開。這是重要的取捨，因為相容的 SQL 不代表運維、隔離和成本模型與單一專用 cluster 相同。
+
+在傳統架構中，KV node 通常同時承擔 compute 和 block storage。增加或移除 node 時，range data 需要搬移，彈性因此受限。Plenum 將 durable storage 抽離，Pebble 透過 Plenum 提供的 file interface 將資料寫入共享 object store，新的 KV node 只需取得 metadata link，再按需讀取資料。Range Shared LSM 要求 link 指向的 bytes 保持 bit-identical，官方文章把這項保證連到 Raft 的 range replication。Plenum 的 blob server 使用跨 Availability Zone 的 local NVMe，S3 作為 durability backstop，controller 管理 namespace、placement、locking 和 authorization。這些設計讓 KV compute 更接近 stateless，但也把 metadata、object placement 和跨層除錯變成平台本身必須維護的元件。
+
+Aegis 位於運維層。Cockroach Labs 描述它會讀取 slow-query logs，提供索引、schema、統計資料和區域配置建議，Operator Workspace 也會提供 session transcript 與 hosted MCP endpoint。官方案例包含把 query latency 從 850 ms 降到 12 ms，以及在五分鐘內替 76 張表分類 GLOBAL、REGIONAL BY ROW 和 REGIONAL BY TABLE。這些是 vendor-reported examples，不是獨立 benchmark，且 Aegis 在發布時仍是 advisory。對生產環境而言，最重要的控制不是「是否有 AI」，而是每個建議是否包含查詢範圍、預估影響、可回復操作和人工核准紀錄。
+
+CIO 的外部分析補上了官方發布沒有強調的限制。若 fleet 原本就接近滿載，pooling 不一定會降低成本。多個工作負載共用 host 時，團隊必須能追蹤 noisy neighbor、隔離邊界、效能抖動和跨層故障。消費計價也可能讓突發代理流量造成預算難以預估。Tiatra 引述 Cockroach Labs 說 automatic compute scaling coming soon，代表發布當下不能把「可彈性配置」直接解讀成所有 compute 都已自動依流量上下調整。採用前應用實際 workload replay 測量啟動時間、tail latency、資源爭用、故障復原和每個虛擬 cluster 的成本。
+
+## 值得追蹤的版本、RFC 與提案
+
+- [Gemini 3.8 Live 官方公告](https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-3-8-live-gemini-3-8-live-extended-thinking/)與 [Live API capabilities guide](https://ai.google.dev/gemini-api/docs/live-guide)：追蹤 3.8 的實際 model ID、thinking 設定、非同步 function calling 和 ephemeral token 流程何時補進正式文件。
+- [Gemini Live API overview](https://ai.google.dev/gemini-api/docs/live)：追蹤 Preview 狀態、輸入輸出格式、語言數量，以及 3.8 公告的 97 語言說法與一般文件目前數字的差異。
+- [Cline Desktop 官方公告](https://cline.bot/blog/cline-desktop-an-open-source-app-for-open-weight-models)與 [Cline releases](https://github.com/cline/cline/releases)：追蹤 beta 版本修正、Windows 行為、匯入歷史格式、排程失敗處理與 Marketplace 權限模型。
+- [Cline open-source repository](https://github.com/cline/cline)：追蹤 Desktop、SDK、CLI 與 extension 共用 harness 的實際程式碼，以及 Tauri、Bun sidecar 和 provider 設定是否持續變更。
+- [Inside Cockroach Continuum: Elastic Infrastructure for Agentic Database Estates](https://www.cockroachlabs.com/blog/continuum-architecture/)：追蹤 RoachMgr 自架版本、Plenum 跨區域支援與後續 Kubernetes 整合。文章表示 RoachMgr 發布時尚未公開，先以 bare-metal deployment 為主，之後才整合 Kubernetes。
+- [Cockroach Continuum announcement](https://www.cockroachlabs.com/blog/continuum-announcement/)：追蹤 Virtual Cluster、Aegis advisory、Migration Assistant 與實際計價規則是否從發布說明進入可驗證的產品文件。
+
+## 參考來源表
+
+| 主題 | 來源與日期 | 來源類型 |
+| --- | --- | --- |
+| Gemini 3.8 Live | [Gemini 3.8 Live & Gemini 3.8 Live Extended Thinking](https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-3-8-live-gemini-3-8-live-extended-thinking/)（2026-09-15，免費） | Google 官方部落格 |
+| Gemini developer API | [Build real-time voice applications with Gemini 3.8 Live and 3.5 Transcribe](https://blog.google/innovation-and-ai/technology/developers-tools/build-real-time-voice-applications-gemini-audio/)（2026-09-15，免費） | Google DeepMind 開發者文章 |
+| Gemini rollout 與 benchmark | [Gemini 3.8 Live Extended Thinking powers Gemini Live, Gmail, & Keep](https://9to5google.com/2026/09/15/gemini-3-8-live-announced/)（2026-09-15，免費） | 9to5Google |
+| Gemini 價格與模型比較 | [Google launches Gemini 3.8 Live to take on OpenAI's GPT-Live-1 at a fraction of the cost](https://the-decoder.com/google-launches-gemini-3-8-live-to-take-on-openais-gpt-live-1-at-a-fraction-of-the-cost/)（2026-09-15，免費） | The Decoder |
+| Gemini 即時推理與工具 | [Google's new speech model Gemini 3.8 Live supports real-time reasoning](https://siliconangle.com/2026/09/15/googles-new-speech-model-gemini-3-8-live-supports-real-time-reasoning/)（2026-09-15，免費） | SiliconANGLE |
+| Gemini Live API | [Gemini Live API overview](https://ai.google.dev/gemini-api/docs/live)（查閱 2026-09-16，免費） | Google AI for Developers |
+| Gemini Live 功能矩陣 | [Live API capabilities guide](https://ai.google.dev/gemini-api/docs/live-guide)（查閱 2026-09-16，免費） | Google AI for Developers |
+| Cline Desktop | [Cline Desktop: An open-source app for open-weight models](https://cline.bot/blog/cline-desktop-an-open-source-app-for-open-weight-models)（2026-09-14，免費） | Cline 官方部落格 |
+| Cline Desktop 外部報導 | [Cline launches desktop coding agent with imports, schedules, and any-model support](https://runtimewire.com/article/cline-launches-desktop-coding-agent-open-weight-models)（2026-09-14，免費） | RuntimeWire |
+| Cline Desktop 外部報導 | [Cline Launches Desktop Workspace for Parallel AI Agent Management and Open-Weight Models](https://thenextgentechinsider.com/pulse/cline-launches-desktop-workspace-for-parallel-ai-agent-management-and-open-weight-models)（2026-09-16，免費） | TheNextGenTechInsider |
+| Cline 原始碼 | [cline/cline](https://github.com/cline/cline)（查閱 2026-09-16，免費） | GitHub |
+| Cockroach Continuum 發布 | [Cockroach Continuum: the Agentic Database Cloud](https://www.cockroachlabs.com/blog/continuum-announcement/)（2026-09-15，免費） | Cockroach Labs 官方部落格 |
+| Cockroach Continuum 架構 | [Inside Cockroach Continuum: Elastic Database Architecture](https://www.cockroachlabs.com/blog/continuum-architecture/)（2026-09-15，免費） | Cockroach Labs 官方部落格 |
+| Cockroach Continuum 外部分析 | [Cockroach Labs bets on database pooling to cut cost of AI-era workloads](https://www.cio.com/article/4222231/cockroach-labs-bets-on-database-pooling-to-cut-cost-of-ai-era-workloads-2.html)（2026-09-15，免費） | CIO |
+| Cockroach Continuum 外部分析 | [Cockroach Labs bets on database pooling to cut cost of AI-era workloads](https://tiatra.com/cockroach-labs-bets-on-database-pooling-to-cut-cost-of-ai-era-workloads/)（查閱 2026-09-16，免費） | Tiatra |
+
+## 延伸閱讀方向
+
+- Live audio 的 PCM buffer、VAD、barge-in、ephemeral token 與 WebSocket backpressure
+- 語音代理的 tool latency、插話率、語言切換與每分鐘成本評估
+- Cline Desktop 匯入歷史的敏感資料清理、provider isolation 與排程權限
+- MCP server 的路徑範圍、程序權限、網路出口與工作區 secrets 管理
+- Cline harness 對 Terminal-Bench pass@1、tool success rate 與長任務復原率的影響
+- CockroachDB range、Raft、Pebble、Plenum 與 Range Shared LSM 的資料生命週期
+- Virtual Cluster 的 noisy neighbor、tail latency、故障復原與成本預算
+- Aegis advisory workflow、MCP endpoint、人工核准與 migration rollback
