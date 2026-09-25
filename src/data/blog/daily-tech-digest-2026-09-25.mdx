@@ -1,0 +1,239 @@
+---
+title: "AI Gateway RCE、Next.js ImageResponse 與 Agent 權限封裝：2026-09-25 技術日報"
+description: "2026-09-25 技術日報：Bifrost MCP stdio 登錄漏洞、Next.js ImageResponse 修補、Docker Sandbox Kit Spec 與 MemTensor 套件供應鏈事件。"
+date: 2026-09-25
+tags: ["daily-digest", "security", "ai", "nextjs", "docker", "software-supply-chain", "developer-tools"]
+draft: false
+---
+
+*資料截點：2026-09-25 09:01（Asia/Taipei）。本期只納入 2026-09-22 09:01 至 2026-09-25 09:01 間發布或出現新進度的內容；前一期日報已報導的事件不重複列入。*
+
+## 重大頭條
+
+### Bifrost MCP stdio 登錄漏洞可造成未驗證遠端程式碼執行
+
+9 月 22 日的 [The Hacker News 報導](https://thehackernews.com/2026/09/critical-bifrost-ai-gateway-flaw-lets.html)重新揭露 Bifrost AI gateway 的 CVE-2026-90898。當 HTTP transport 使用 2.1.0 以前的版本，而且管理 API 維持預設的未啟用驗證時，攻擊者可以透過 MCP client 登錄流程要求 gateway 啟動任意 stdio 程式。[JFrog Security Research 的原始公告](https://research.jfrog.com/vulnerabilities/bifrost-is-vulnerable-to-unauthenticated-remote-code-execution-via-mcp-stdio-client-registration-cve-2026-90898/)指出，程式會在 MCP handshake 前啟動，並以 Bifrost process user 的權限執行；[OSV 的 CVE 紀錄](https://osv.dev/vulnerability/CVE-2026-90898)列為 CVSS 3.1 9.8 Critical。9 月 23 日的[後續整理](https://cyber-reports.com/critical-bifrost-ai-gateway-flaw-lets-attackers-run-commands-without-credentials/)也確認 2.1.0 才會對未驗證的 stdio 登錄回傳 403，2.0.0 並沒有包含這個修補。
+
+為何重要：Bifrost 不是單一模型的本機 CLI，而是集中保存多個模型供應商 API key 的 gateway。官方 Docker image 的管理介面若隨容器埠號發布到外部網路，暴露範圍會比預設只綁定 localhost 的 binary 更大。修補後仍需要檢查歷史連線紀錄，因為升級只會阻擋新的登錄，不會撤銷已外洩的 virtual key 或 provider credential。維運團隊應升級到 `transports/v2.1.0`、啟用管理驗證、限制管理埠的網路範圍，並輪替曾在暴露執行個體中使用過的憑證。
+
+### 續報：Next.js 16.3.6 修補 ImageResponse 的 SVG 注入風險
+
+前一期已列出 Next.js 預計發布的安全更新，本期只報導修補後的新資訊。Vercel 在 [9 月 22 日的官方公告](https://nextjs.org/blog/upcoming-nextjs-security-release-september-22-2026)發布 `16.3.6` 與 `15.5.26`，後續分析將問題識別為 CVE-2026-94545，涉及 Node.js runtime 的 `next/og` `ImageResponse`。[Netlify 的說明](https://www.netlify.com/changelog/2026-09-22-nextjs-imageresponse-vulnerability/)指出，只有把未可信輸入放進動態圖片內容的應用程式需要優先確認暴露面。[The Hacker News 的 9 月 23 日分析](https://thehackernews.com/2026/09/critical-nextjs-imageresponse-flaw-can.html)則把受影響範圍縮到 Next.js 16.2.0 至 16.3.5 的 Node.js implementation，並指出 Edge implementation 不在相同範圍內。[Checkmarx 的技術分析](https://checkmarx.com/zero-post/cve-2026-94545-from-jsx-to-svg-injection/)說明底層修補來自 Satori 的 SVG 序列化與 escaping 強化。
+
+為何重要：這不是只更新 lockfile 中一個顯式列出的套件，Satori 是由 Next.js 帶入的上游元件，`npm audit` 未必會直接把它列成獨立相依套件。使用 `ImageResponse`、`opengraph-image` 或從 request URL 讀取文字的 route handler，都應搜尋實際程式碼，而不是只看是否使用自訂 SVG。`15.5.26` 同時發布安全強化，但 9 月 23 日的分析將 RCE 風險集中在 16.2.0 至 16.3.5，不能把兩條版本線的影響描述成完全相同。若無法立即升級，暫時不要把未可信資料放入 Node.js `ImageResponse` 的 SVG 內容、屬性或 style，並在修補後重新部署所有 preview 與 branch deploy。
+
+### Docker 把 Agent 的權限宣告封裝成 OCI image
+
+Docker 在 9 月 24 日同時宣布 [Cloud Sandboxes](https://www.docker.com/blog/introducing-cloud-sandboxes-start-on-your-laptop-finish-in-the-cloud/)與 [Sandbox Kit Specification v3](https://www.docker.com/blog/docker-sandbox-kit-spec/)。Kit 是普通 OCI image，manifest annotation `vnd.docker.sandbox.kit.descriptor` 放置 agent、工具、網路、憑證與 volume 等 capability 宣告，內容與宣告由同一個 digest 綁定。[Linux.com 的獨立整理](https://www.linux.com/featured/docker-commits-to-bringing-the-sandbox-kit-spec-to-the-cncf/)確認 Docker 將規格以 Apache 2.0 發布，並承諾提交 CNCF 做中立治理；[規格 repository](https://github.com/docker/sandbox-kit-spec)則提供 descriptor grammar、BuildKit frontend 與兩套 conformance suite。Cloud Sandboxes 使用相同的 microVM 隔離模型，透過 `sbx move my-project --to cloud` 把本機工作的檔案系統搬到 Docker 管理的雲端執行個體，最長每次工作階段 24 小時。
+
+為何重要：目前 agent 的權限常散落在 `docker run` 參數、Compose、CI 設定與個人記憶中，變更很難被審查或回溯。Kit 把「這個 agent 要碰什麼」變成能簽署、掃描、比較差異的 artifact，但宣告本身不是授權，只有 conforming runtime 真的實作規格時才會強制限制。規格目前仍標示為 experimental，repository 以 2026 年第四季作為 final version 目標，因此不應把 v3 當成已完成的跨 runtime 標準。Cloud Sandboxes 的公開價格從 1 vCPU、2 GiB 的每小時 0.07 美元，到 16 vCPU、32 GiB 的每小時 1.12 美元，另有每次工作階段上限，平台團隊仍需評估長時間並行 agent 的總成本與網路策略。
+
+### MemTensor npm 與 PyPI 發布物被植入 credential-stealing binary
+
+[Socket 的 9 月 23 日研究](https://socket.dev/blog/memtensor-compromise)指出，MemTensor 的 MemOS 相關發布物在 npm 與 PyPI 同日出現惡意版本。受影響的 npm 套件是 `@memtensor/memos-cloud-openclaw-plugin` 的 `0.1.21`、`0.1.23` 與 `0.1.25`，PyPI 套件則是 `MemoryOS==2.0.34`；每個發布物都帶有跨平台的 Go binary `sckit`。Socket 的靜態分析顯示，npm plugin 會在 OpenClaw gateway 啟動與 memory recall hook 執行時啟動 binary，PyPI 套件則在 `memos` import 時啟動。研究中列出的目標包含 npm、PyPI、GitHub、GitLab、AWS、Vault 與 SSH secrets，並連到 `skyleen[.]fr` 網域。[MemOS repository 的可疑 commit](https://github.com/MemTensor/MemOS/commit/b52958f)與[OpenClaw plugin 的對應 commit](https://github.com/MemTensor/memos-cloud-openclaw-plugin/commit/e0c1ca3)提供了發布時間與變更檔案的可追查證據。
+
+為何重要：這次不是只在 `postinstall` 內執行一次的 lifecycle script，而是把 native binary 藏在 agent memory plugin 的正常啟動或 import 路徑中。npm 頁面目前顯示 `0.1.20`，PyPI 頁面目前顯示 `2.0.27`，但 registry 上的目前版本不會清除已安裝主機的程序、token 或 shell history。受影響環境應先隔離工作站與 CI runner，再從已知良好的 lockfile 與 artifact 重建，不應只刪除 `node_modules` 或重新安裝最新版本。所有曾在該主機出現的雲端、SSH、套件 registry、GitHub、GitLab 與 agent provider 憑證都應輪替，並保存程序樹、DNS、proxy 與檔案時間線供後續調查。
+
+## 快速重點
+
+- [CVE-2026-90898](https://osv.dev/vulnerability/CVE-2026-90898)：Bifrost 未驗證 MCP stdio client 登錄可達到遠端程式碼執行，修補版本是 `transports/v2.1.0`。
+- [JFrog 修補說明](https://research.jfrog.com/vulnerabilities/bifrost-is-vulnerable-to-unauthenticated-remote-code-execution-via-mcp-stdio-client-registration-cve-2026-90898/)：Bifrost `transports/v2.0.0` 與 1.6.x 至 1.6.11 仍不包含 MCP stdio 登錄修補。
+- [The Hacker News](https://thehackernews.com/2026/09/critical-bifrost-ai-gateway-flaw-lets.html)：官方 Docker image 綁定管理介面到 `0.0.0.0` 時，公開埠號會放大 Bifrost 管理 API 的暴露範圍。
+- [Next.js 官方公告](https://nextjs.org/blog/upcoming-nextjs-security-release-september-22-2026)：前一期預告的 out-of-band release 已對應到 `16.3.6` 與 `15.5.26`。
+- [Netlify 影響說明](https://www.netlify.com/changelog/2026-09-22-nextjs-imageresponse-vulnerability/)：若應用程式不使用 `ImageResponse`，或只渲染可信輸入，受 CVE-2026-94545 的直接影響較小，但仍應確認部署版本。
+- [Checkmarx 分析](https://checkmarx.com/zero-post/cve-2026-94545-from-jsx-to-svg-injection/)：Satori 的 SVG escaping 修補是 Next.js 更新的關鍵上游變更。
+- [Docker Sandbox Kit Spec v3](https://github.com/docker/sandbox-kit-spec)：Kit 使用 OCI image 與 `vnd.docker.sandbox.kit.descriptor` annotation，並提供 artifact 與 runtime 兩套 conformance suite。
+- [Docker Cloud Sandboxes](https://www.docker.com/blog/introducing-cloud-sandboxes-start-on-your-laptop-finish-in-the-cloud/)：需要 `sbx 0.45.1` 或更新版本，支援本機與雲端間搬移同一個 sandbox 工作階段。
+- [Linux.com](https://www.linux.com/featured/docker-commits-to-bringing-the-sandbox-kit-spec-to-the-cncf/)：Docker 將 Kit Spec 提交 CNCF，目標是讓 agent 的權限宣告不綁定單一 runtime 供應商。
+- [Socket 供應鏈分析](https://socket.dev/blog/memtensor-compromise)：npm 的 `0.1.21`、`0.1.23`、`0.1.25` 與 PyPI 的 `2.0.34` 被列為惡意發布版本，`sckit` 會在正常 plugin 或 module 路徑啟動。
+- [npm 套件頁面](https://www.npmjs.com/package/@memtensor/memos-cloud-openclaw-plugin)：本次查閱時頁面顯示 `0.1.20`，先前的安裝紀錄仍需逐一核對。
+- [PyPI 套件頁面](https://pypi.org/project/MemoryOS/)：本次查閱時頁面顯示 `2.0.27`，應以 lockfile、安裝時間與 wheel hash 判斷主機是否曾載入 `2.0.34`。
+- [Darktrace 研究](https://www.darktrace.com/blog/hijacking-agentic-harnesses-to-attack-an-organization)：9 月 24 日發布的研究指出，多個 agent harness 直接信任本機 conversation history，供應商尚未在該文中公布通用的歷史訊息驗證機制。
+- [GitHub Security Lab Taskflow Agent](https://www.github.blog/security/application-security/ai-powered-fuzzing-with-the-github-security-lab-taskflow-agent/)：新的 Fuzzing Taskflow 可自動選 entrypoint、產生 harness、執行 AFL++、讀取 coverage 並整理 crash，但官方明確警告它會在 host 執行任意 build command。
+- [Databricks Unity Gateway CLI](https://www.databricks.com/blog/deploy-and-manage-coding-agents-scale-unity-gateway-cli)：9 月 24 日推出集中管理模型、工具與 spending policy 的 coding-agent CLI，值得和 Kit 的權限宣告模型一起比較。
+
+## 細節說明
+
+### Bifrost 的修補邊界在管理驗證與執行面
+
+CVE-2026-90898 的關鍵不是 MCP client 本身能不能連線，而是管理 API 在沒有驗證時把 stdio client 當成可立即啟動的本機程序。JFrog 的描述指出，Bifrost 收到 client 登錄後會先啟動 `command` 與 `args`，不需要完成 MCP handshake。這使管理 API 同時扮演設定介面與程序啟動器，任何暴露在不可信網路的 listener 都需要當成高權限控制面。修補版本改成拒絕未驗證的 stdio 登錄，官方建議則是升級、啟用 authentication，並把管理 listener 限制在可信網路。下列設定對比只展示防禦方向，不執行任何命令。
+
+~~~yaml
+# 改前：預設設定會讓管理 API 沒有驗證
+governance:
+  auth_config:
+    is_enabled: false
+
+# 改後：啟用管理驗證，再以網路層限制 listener
+governance:
+  auth_config:
+    is_enabled: true
+~~~
+
+Docker 部署也要把「升級版本」與「埠號暴露」分開檢查。官方 Docker image 的管理 API 綁定行為與一般 binary 不同，不能因為本機測試只看到 `127.0.0.1` 就推論容器外部同樣安全。部署設定應把管理埠綁到管理網段，並以反向代理或 service mesh 的 policy 再加一道限制。
+
+~~~yaml
+services:
+  bifrost:
+    image: maximhq/bifrost:transports-v2.1.0
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+~~~
+
+升級後可以用非破壞性的未驗證請求確認管理端點拒絕存取，但不要在 production 送入可啟動程序的完整 payload。觀測面應搜尋管理 API 的異常 4xx、短時間大量 client registration、Bifrost process 產生的非預期子程序，以及 provider credential 的使用量突增。只確認容器仍能回應 `/health` 不足以代表憑證沒有外洩，因為攻擊可能早已在升級前完成。這也是為什麼 JFrog 與 The Hacker News 都把 credential rotation 列為暴露執行個體的處置步驟。
+
+### Next.js ImageResponse 的風險在未可信資料進入 SVG
+
+`ImageResponse` 會把 JSX 與 CSS 轉成 SVG，再產生社群預覽圖片。問題出在 Node.js implementation 使用的上游 Satori 在特定值的 escaping 上不夠嚴格，讓未可信輸入有機會被當成 SVG 結構，而不是純文字。實際暴露面通常出現在 route handler 直接讀取 query parameter、slug 或使用者名稱，接著把值放進圖片內容、attribute 或 style。單純使用 Next.js 不等於一定暴露，沒有使用 `next/og` 或只渲染固定字串的路由需要先完成盤點再判斷。最直接的修補仍是升級到 `16.3.6`，輸入限制只是等待部署期間的暫時緩解。
+
+~~~tsx
+// 改前：把 request 內容直接帶進動態圖片
+import { ImageResponse } from "next/og";
+
+export function GET(request: Request) {
+  const title = new URL(request.url).searchParams.get("title") ?? "Preview";
+
+  return new ImageResponse(
+    <div style={{ fontSize: 64 }}>
+      {title}
+    </div>,
+  );
+}
+~~~
+
+~~~tsx
+// 改後：升級 Next.js，並在等待部署時只允許有限的文字輸入
+import { ImageResponse } from "next/og";
+
+const allowedText = /^[\p{L}\p{N} .,!?()_+-]{1,80}$/u;
+
+export function GET(request: Request) {
+  const rawTitle = new URL(request.url).searchParams.get("title") ?? "";
+  const title = allowedText.test(rawTitle) ? rawTitle : "Preview";
+
+  return new ImageResponse(
+    <div style={{ fontSize: 64 }}>
+      {title}
+    </div>,
+  );
+}
+~~~
+
+這個範例不是替代框架升級的通用 sanitizer。它的目的只是避免在修補完成前把任意字元放進圖片樹，實際專案仍要檢查 SVG attribute、style 與其他由 request 控制的欄位。部署時應同時搜尋 `ImageResponse`、`next/og`、`opengraph-image` 與 `ImageResponse` 的 route handler，而不是只搜尋 `satori`。完成升級後，重新建置並刪除仍使用舊 bundle 的 preview、branch deploy 與長期快取。若應用程式直接使用 Satori，也要依 [Satori 的修補版本資訊](https://github.com/vercel/satori)獨立確認，不要假設 Next.js 的版本檢查會涵蓋所有直接相依。
+
+### Kit 把 agent 的權限變成可審查的 OCI metadata
+
+Docker 的設計把 workload 與 mixin 分成兩種 Kit。workload 提供 root filesystem，每個 composition 只能有一個；mixin 可以疊加 CLI、credential binding、network policy 或 context。這讓「能執行什麼」與「能碰什麼」出現在同一份 descriptor，而不是一半在 image、一半在啟動命令。規格使用 typed capability，並要求未滿足的 `requires` 或無法授予的 required capability 讓解析失敗。需要特別注意的是，Kit 的 capability 是 request，不是自我授權，runtime 仍要決定是否接受。
+
+官方範例把 GitHub API 的允許範圍與拒絕範圍寫成同一個 network policy。下列片段保留規格中的結構，展示 deny 規則如何針對 repository delete API 收窄權限。
+
+~~~yaml
+capabilities:
+  - type: com.docker.sandbox/network-policy@2
+    config:
+      runtime:
+        allow:
+          - github.com
+          - hosts: [api.github.com]
+            methods: [GET, HEAD, POST, PATCH, PUT, DELETE]
+        deny:
+          - hosts: [api.github.com]
+            methods: [DELETE]
+            paths: [/repos/**]
+
+  - type: com.docker.sandbox/credential@1
+    optional: true
+    config:
+      service: github
+      phase: runtime
+      apiKey:
+        name: GH_TOKEN
+        proxyManaged: true
+        inject:
+          - {domain: api.github.com, header: Authorization, format: "Bearer %s"}
+~~~
+
+這種宣告讓 reviewer 可以在 image digest 改變時看到權限差異，也讓 registry、scanner 與 signing tool 沿用既有 OCI 流程。它不能單獨解決惡意 Kit 或 runtime 不遵守規格的問題，因為忽略 annotation 的 engine 仍可能把它當普通 image 執行。Docker repository 目前把規格、BuildKit frontend 與 conformance suite 放在同一處，並明確標示 v3 仍是 experimental。平台團隊採用前應先確認實際執行端是不是 conforming runtime，再為 network、credential、volume 與 device capability 建立核准規則。
+
+Cloud Sandboxes 解決的是另一個問題。相同的 microVM isolation model 可以在本機與 Docker managed compute 間移動，CLI 範例是 `sbx move my-project --to cloud`。雲端版每個 sandbox 有獨立的 secret 與 network policy，預設工作階段一小時，最長 24 小時，並以每秒計費。長時間執行 agent 時，權限 descriptor、secret injection、網路 egress 與暫停後的資源費用必須一起納入變更審查。
+
+### MemTensor 事件顯示 agent plugin 是新的供應鏈邊界
+
+Socket 的分析指出，惡意發布物不是只在 `postinstall` 內執行一次，而是把 native binary 放進正常的 plugin 或 Python import 流程。npm plugin 會將 `sckit` 依作業系統與 CPU 架構選出，再以 detached child process 啟動；memory recall hook 還會把 prompt text 傳給它。PyPI 版本則在 `memos` module import 時載入 binary，這使沒有顯式執行 agent task 的開發者也可能觸發。下列是從研究中抽出的行為形狀，已移除 binary 路徑、設定內容與外傳細節，只保留供靜態掃描使用的訊號。
+
+~~~javascript
+// 可疑行為樣式，僅供靜態掃描，不要執行
+const binary = selectPlatformBinary();
+
+spawn(binary, ["stage0", "--config64", encodedConfig], {
+  detached: true,
+  stdio: "ignore",
+  env: { ...process.env },
+}).unref();
+~~~
+
+正常的 memory plugin 不一定需要背景 detached process，也不應在每次 recall 時把完整 prompt 傳給未說明用途的 native binary。掃描器可以把 `spawn`、`detached: true`、`stdio: "ignore"`、跨平台內嵌執行檔、環境變數複製與非預期網路目的地組合成高風險規則，但仍要比對發布物與 source commit。受影響版本的 source commit 時間與 registry publish 時間只差數小時，說明單看 GitHub contributor 或套件名稱不足以判斷可信度。應把 npm、PyPI、GitHub release、CI publish token、lockfile 與 artifact hash 放進同一條 provenance chain。
+
+~~~bash
+# 防禦性盤點，不安裝或執行可疑版本
+npm ls @memtensor/memos-cloud-openclaw-plugin --all
+python -m pip show MemoryOS
+
+# 從 lockfile 與安裝紀錄找出實際版本
+grep -R "memos-cloud-openclaw-plugin\\|MemoryOS" package-lock.json bun.lockb pnpm-lock.yaml requirements*.txt 2>/dev/null
+~~~
+
+如果主機曾載入 `0.1.21`、`0.1.23`、`0.1.25` 或 `2.0.34`，應先斷開對外網路並保存 volatile evidence，再從乾淨映像檔重建。憑證輪替範圍不只包含 MemOS API key，也包含同一個使用者家目錄中能讀到的 SSH、cloud CLI、GitHub、GitLab、npm、PyPI 與 Vault 憑證。`skyleen[.]fr` 等 IOC 可加入 DNS、proxy、EDR 與 CI audit log，但不能因為查不到 DNS 紀錄就排除本機資料已被讀取。registry 目前列出的安全版本只能協助未安裝主機避免再拉到惡意版本，不能取代事件回應。
+
+## 值得追蹤的版本、RFC 與提案
+
+- [Bifrost `transports/v2.1.0` 與修補 PR 6757](https://github.com/maximhq/bifrost/pull/6757)：確認管理 API 對未驗證 stdio registration 的 403 行為、Docker image tag 與 downstream chart 是否同步。
+- [CVE-2026-90898 的 OSV 與 CVE references](https://osv.dev/vulnerability/CVE-2026-90898)：追蹤 affected range、CWE-284/CWE-306 分類與是否進入公開 exploitation catalog。
+- [Next.js 16.3.6、15.5.26 官方安全更新](https://nextjs.org/blog/upcoming-nextjs-security-release-september-22-2026)：核對 GHSA-vcvr-r3jv-pc5j 的完整 affected range、Node.js 與 Edge implementation 差異。
+- [Satori repository](https://github.com/vercel/satori)：追蹤 SVG escaping 修補、直接使用 Satori 的專案與 `0.33.5` 版本資訊。
+- [Docker Sandbox Kit Specification v3](https://github.com/docker/sandbox-kit-spec)：追蹤 descriptor grammar、capability type version、OCI annotation 與 Q4 2026 final version 目標。
+- [Docker Cloud Sandboxes](https://www.docker.com/blog/introducing-cloud-sandboxes-start-on-your-laptop-finish-in-the-cloud/)：追蹤 `sbx` CLI、雲端與本機 secret 分離、network policy 以及每個工作階段的費用上限。
+- [GitHub Security Lab Fuzzing Taskflow](https://github.com/GitHubSecurityLab/seclab-taskflows-fuzzing)：追蹤 taskflow agent 的 host execution boundary、AFL++ coverage feedback 與 prompt injection 防護。
+- [Darktrace Agent Hijacks 研究](https://www.darktrace.com/blog/hijacking-agentic-harnesses-to-attack-an-organization)：追蹤 Claude Code、Codex、Kiro-CLI 與 Pi 是否加入歷史訊息簽章、server-side verification 或可稽核的 agent session state。
+- [MemTensor MemOS repository](https://github.com/MemTensor/MemOS)：追蹤 registry 回收、release provenance、publish token rotation 與受影響 commit 的後續調查。
+- [Databricks Unity Gateway CLI](https://www.databricks.com/blog/deploy-and-manage-coding-agents-scale-unity-gateway-cli)：比較集中式 model、tool、spending policy 與 Docker Kit capability descriptor 的責任邊界。
+
+## 參考來源表
+
+| 主題 | 來源與日期 | 來源類型 |
+| --- | --- | --- |
+| Bifrost CVE 原始研究 | [Bifrost is vulnerable to Unauthenticated Remote Code Execution via MCP Stdio Client Registration](https://research.jfrog.com/vulnerabilities/bifrost-is-vulnerable-to-unauthenticated-remote-code-execution-via-mcp-stdio-client-registration-cve-2026-90898/)（2026-09-14，免費，原始公告） | JFrog Security Research |
+| Bifrost CVE database record | [CVE-2026-90898](https://osv.dev/vulnerability/CVE-2026-90898)（查閱 2026-09-25，免費） | OSV |
+| Bifrost 新聞報導 | [Critical Bifrost AI Gateway Flaw Lets Attackers Run Commands Without Credentials](https://thehackernews.com/2026/09/critical-bifrost-ai-gateway-flaw-lets.html)（2026-09-22，免費） | The Hacker News |
+| Bifrost 後續整理 | [Critical Bifrost AI Gateway Flaw Lets Attackers Run Commands Without Credentials](https://cyber-reports.com/critical-bifrost-ai-gateway-flaw-lets-attackers-run-commands-without-credentials/)（2026-09-23，免費） | Cyber Reports |
+| Bifrost 修補程式碼 | [maximhq/bifrost pull 6757](https://github.com/maximhq/bifrost/pull/6757)（查閱 2026-09-25，免費） | GitHub |
+| Next.js 預告與版本 | [Upcoming Next.js Security Update for a Critical Upstream Issue](https://nextjs.org/blog/upcoming-nextjs-security-release-september-22-2026)（2026-09-22，免費） | Next.js Blog |
+| Next.js 平台影響 | [Next.js ImageResponse security release: what to know](https://www.netlify.com/changelog/2026-09-22-nextjs-imageresponse-vulnerability/)（2026-09-22，免費） | Netlify |
+| Next.js CVE 分析 | [Critical Next.js ImageResponse Flaw Can Lead to Server Code Execution via Crafted SVG Input](https://thehackernews.com/2026/09/critical-nextjs-imageresponse-flaw-can.html)（2026-09-23，免費） | The Hacker News |
+| Next.js SVG escaping 分析 | [CVE-2026-94545: From JSX to SVG Injection](https://checkmarx.com/zero-post/cve-2026-94545-from-jsx-to-svg-injection/)（2026-09-23，免費） | Checkmarx |
+| Next.js 更新整理 | [Critical Next.js RCE Vulnerability Fixed in Version 16.3.6](https://securityonline.info/nextjs-rce-vulnerability-cve-2026-94545/)（2026-09-23，免費） | Security Online |
+| Docker Cloud Sandboxes | [Introducing Cloud Sandboxes: Start on Your Laptop, Finish in the Cloud](https://www.docker.com/blog/introducing-cloud-sandboxes-start-on-your-laptop-finish-in-the-cloud/)（2026-09-24，免費） | Docker Blog |
+| Docker Kit Spec | [Docker Sandbox Kit Spec: Authority as Code](https://www.docker.com/blog/docker-sandbox-kit-spec/)（2026-09-24，免費） | Docker Blog |
+| Docker 與 CNCF | [Docker Brings Sandbox Kit Spec to the CNCF](https://www.docker.com/blog/docker-sandbox-kit-spec-cncf/)（2026-09-24，免費） | Docker Blog |
+| Docker Kit 獨立報導 | [Docker Commits to Bringing the Sandbox Kit Spec to the CNCF](https://www.linux.com/featured/docker-commits-to-bringing-the-sandbox-kit-spec-to-the-cncf/)（2026-09-24，免費） | Linux.com |
+| Docker Kit repository | [docker/sandbox-kit-spec](https://github.com/docker/sandbox-kit-spec)（查閱 2026-09-25，免費） | GitHub |
+| MemTensor 供應鏈研究 | [MemTensor npm and PyPI Packages Compromised in Credential-Stealing Supply Chain Attack](https://socket.dev/blog/memtensor-compromise)（2026-09-23，免費） | Socket |
+| MemTensor npm package | [@memtensor/memos-cloud-openclaw-plugin](https://www.npmjs.com/package/@memtensor/memos-cloud-openclaw-plugin)（查閱 2026-09-25，免費） | npm |
+| MemTensor PyPI package | [MemoryOS](https://pypi.org/project/MemoryOS/)（查閱 2026-09-25，免費） | PyPI |
+| MemOS 可疑 commit | [chore: prepare MemoryOS 2.0.34 release build](https://github.com/MemTensor/MemOS/commit/b52958f)（2026-09-23，免費） | GitHub |
+| OpenClaw plugin 可疑 commit | [chore: prepare credential-isolation source](https://github.com/MemTensor/memos-cloud-openclaw-plugin/commit/e0c1ca3)（2026-09-23，免費） | GitHub |
+| Agent history poisoning | [Agent Hijacks: How Conversation History Poisoning Can Turn AI Agents Into Attackers](https://www.darktrace.com/blog/hijacking-agentic-harnesses-to-attack-an-organization)（2026-09-24，免費，研究報告） | Darktrace |
+| Agent fuzzing workflow | [AI-powered fuzzing with the GitHub Security Lab Taskflow Agent](https://www.github.blog/security/application-security/ai-powered-fuzzing-with-the-github-security-lab-taskflow-agent/)（2026-09-24，免費） | GitHub Blog |
+| Agent 管理 CLI | [Deploy and manage coding agents at scale with the Unity Gateway CLI](https://www.databricks.com/blog/deploy-and-manage-coding-agents-scale-unity-gateway-cli)（2026-09-24，免費） | Databricks Blog |
+
+## 延伸閱讀方向
+
+- MCP stdio client registration、管理 API authentication 與 AI gateway 的 credential isolation
+- Next.js `ImageResponse`、Satori SVG serialization 與 Node.js、Edge runtime 邊界
+- OCI image annotation、capability descriptor、runtime conformance 與 agent sandbox policy
+- Agent microVM、secret proxy injection、network egress 與長時間背景工作階段的成本控制
+- npm、PyPI、GitHub release provenance、publish token 與跨 registry artifact hash
+- Agent plugin 的 native binary、detached process、import-time execution 與行為式供應鏈掃描
+- Conversation history integrity、provider response signature 與可稽核的 agent session state
+- LLM fuzzing taskflow、AFL++ coverage feedback、host execution boundary 與 prompt injection
