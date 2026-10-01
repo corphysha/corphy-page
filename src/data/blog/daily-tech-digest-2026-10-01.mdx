@@ -1,0 +1,226 @@
+---
+title: "TanStack Start XSS、MSW 3.0 與 EDG 編譯器開源：2026-10-01 技術日報"
+description: "2026-10-01 技術日報：TanStack Start 高風險 XSS 修補、WSL containers GA、EDG C/C++ front end 開源、MSW 3.0，以及 Debezium、Cloudflare Sandbox SDK 與 AI 基礎設施的新版本。"
+date: 2026-10-01
+tags: ["daily-digest", "security", "javascript", "cpp", "windows", "databases", "cloud", "ai-infrastructure"]
+draft: false
+---
+
+*資料截點：2026-10-01 09:00（Asia/Taipei）。本期只納入 2026-09-28 09:00 至 2026-10-01 09:00 間發布或出現新進度的內容；前一期日報已報導的事件不重複列入。*
+
+## 重大頭條
+
+### TanStack Start 修補 CVSS 9.3 的反射型 XSS
+
+TanStack 在 [官方安全公告](https://tanstack.com/blog/tanstack-start-security-update-cve-2026-102989)與 [GitHub security advisory](https://github.com/TanStack/router/security/advisories/GHSA-qx66-fv34-fjm8)中確認，TanStack Start 的 server-function response handling 存在未驗證反射型跨網站指令碼攻擊，公告日期為 2026-09-30，CVSS 3.1 基本分數為 9.3。攻擊者不需要帳號或程式碼存取權，只要誘使使用者開啟特製 URL，受影響應用程式就可能從自己的 origin 回傳攻擊者控制的 HTML，瀏覽器會以該網站的權限執行其中的 JavaScript。[Appwrite 的獨立說明](https://appwrite.io/blog/post/tanstack-start-server-function-xss)也確認了這個攻擊條件，並指出攻擊腳本可在使用者權限範圍內呼叫前端 SDK 或應用程式自身的路由。
+
+問題出在 server-function transport 把 request payload 的欄位帶入內部 middleware state，錯誤處理又可能把攻擊者控制的 response-shaped object 當成真正的 HTTP response。修補版限制 client 可提交的欄位，並在 server boundary 驗證 response。受影響範圍是 `@tanstack/start-server-core` 1.143.12 以上至 1.169.39 以前，以及各框架套件對應的舊版本。第一個修補版本分別為 `@tanstack/react-start` 1.168.60、`@tanstack/solid-start` 1.168.57、`@tanstack/vue-start` 1.168.56 與 `@tanstack/start-server-core` 1.169.39。
+
+這件事對使用 SSR 或 server functions 的前端專案特別重要。只更新本機 `package.json` 不會修補已部署的 bundle，必須更新 lockfile、重新建置，再確認新的部署已接手流量。Appwrite Cloud 已對預設 `/_serverFn/` 路徑提供暫時性 edge rule，但官方明確提醒，`x-tsr-serverFn: true` 是 client 可控制的 header，不是身份驗證。靜態輸出沒有 server function endpoint 時，這個特定攻擊路徑不會成立，但日後切回 SSR 仍會重新出現暴露面。
+
+~~~bash
+# 先查實際解析到的版本，不只看 package.json
+npm ls @tanstack/start-server-core
+bun pm ls --all
+
+# React Start 的修補版本，並同步更新 router
+npm install @tanstack/react-start@latest @tanstack/react-router@latest
+
+# 重新安裝、建置並確認部署使用的新 lockfile
+npm ci
+npm run build
+~~~
+
+### WSL containers 正式可用，容器生命週期進入 WSL 原生工具鏈
+
+Microsoft 在 [Windows Developer Blog](https://blogs.windows.com/windowsdeveloper/2026/09/29/wsl-containers-now-generally-available/)宣布 WSL containers 於 2026-09-29 正式可用。功能由 `wslc.exe` 提供，也有 `container.exe` 這個別名，能在 Windows 上直接建立、執行與部署 Linux containers，並提供可讓原生 Windows 應用程式呼叫的 API。這不是單純把 Docker CLI 包在 WSL 裡，而是把 container lifecycle、networking、health check、事件串流與儲存位置納入 WSL 的管理介面。
+
+GA 版本新增 `wslc container restart`、`wslc container cp`、`wslc system info`、`wslc network connect`、`wslc network disconnect` 與 `wslc events` 等命令，也支援 `--mount`、`--stop-timeout`、container health checks 及可設定的預設儲存路徑。[WSL 的 GitHub release history](https://github.com/microsoft/WSL/releases)可以看到相同功能在發行前已分批進入 release branch，例如網路連接、health check、container copy 與 `wslc` 的逾時參數。這種發佈方式讓 preview 使用者可以先驗證命令和 API，再在 GA 版本固定整合路徑。
+
+企業管理也跟著進入同一個功能面。Microsoft Defender for Endpoint 可以把 WSL container 的 process、file 與 network activity 連回 Windows host，Intune 則能控制是否允許 WSL containers，並限制 image pull 只能來自核准 registry。Microsoft 表示目前的 `wslc` 在存取 Windows 檔案時最高可達到約兩倍速度，但這是官方在特定工作負載下的說法，不應直接當成所有專案的基準。`wslc compose` 仍在 roadmap，不是本次 GA 已提供的能力。
+
+~~~bash
+# 更新 WSL
+wsl --update
+
+# GA 版本可用的生命週期與觀測命令
+wslc container restart <container>
+wslc container cp <container> <archive>
+wslc system info
+wslc network connect <container> <network>
+wslc network disconnect <container> <network>
+wslc events
+~~~
+
+### EDG C/C++ front end 公開原始碼，編譯器基礎設施換成公益維護模式
+
+[EDG 的開源轉型公告](https://edgcpp.org/)表示，Edison Design Group 的 C/C++ front end 在 2026-09-30 公開原始碼，The C++ Alliance 成為其非營利管理者。[Phoronix 的獨立報導](https://www.phoronix.com/news/EDG-CPP-Open-Sourced)指出，這套 front end 過去被 Intel C++ Compiler classic、NVIDIA CUDA NVCC 與 Microsoft Visual Studio IntelliSense 等工具採用，公開版本以 Apache 2.0 授權對外說明。實際整合前仍應檢查 [EDG compiler repository](https://github.com/edgcpp/compiler)內的授權檔與各子目錄條款。
+
+EDG 的價值不只在能解析 C++ 原始碼。官方文件說明，front end 會整合 preprocessing、語法與語意分析，產生保留 source correspondence 的 tree-structured intermediate language，並附帶 C/C++ 產生後端、template prelinker、IL display utility 與 name demangler。[CPFE 7.0 文件](https://edgcpp.org/doc/)列出對 ISO C++20 的支援與部分 C++23/24 功能，也保留 Microsoft、GNU、Clang、C++/CLI 等 dialect。對需要做 source-to-source transformation、靜態分析或自有後端的團隊來說，公開完整 front end 比公開單一 parser library 更有用。
+
+這次轉型也改變了維護資金的分配方式。EDG 網站把工作分成社群 pull request、持續維護與社群共同出資的功能開發，三條路徑最後都進入同一份公開 codebase。這種安排可以降低封閉編譯器的依賴風險，但也會把 build system、測試矩陣、平台支援與授權審查的責任帶給新社群。EDG 的技術背景文件說明其 front end 約有 655,000 行 C++ 原始碼，導入前需要先確認 build instructions、產物授權與版本標記是否已滿足產品供應鏈要求。
+
+下面的輸入例子使用 C++20 concepts 與 requires expression，適合拿來驗證 front end 的語法、名稱查找與約束診斷，而不是用單一 hello-world 判斷相容性。
+
+~~~cpp
+#include <concepts>
+#include <cstddef>
+#include <span>
+
+template <typename T>
+concept Numeric = std::integral<T> || std::floating_point<T>;
+
+template <Numeric T>
+T sum(std::span<const T> values) {
+    T result{};
+    for (const T value : values) {
+        result += value;
+    }
+    return result;
+}
+
+int main() {
+    const int values[] = {1, 2, 3, 4};
+    return sum(std::span<const int>{values}) == 10 ? 0 : 1;
+}
+~~~
+
+### MSW 3.0 改用 ESM-only 與新的 network abstraction
+
+Mock Service Worker 在 [官方 3.0 公告](https://mswjs.io/blog/introducing-msw-3.0)於 2026-09-30 發布 major version。這次版本把 Node.js 18 與 20 移出支援範圍，最低版本改為 Node.js 22，並支援 Node.js 22、24 與 26。套件改成 ESM-only，TypeScript 最低版本為 5.9，GraphQL 依賴改為 optional peer dependency，GraphQL 17、GraphQL subscriptions、page navigation 與 form submission interception 也納入新架構。
+
+官方提供的 package size 測量是 library tarball 從 416KB 降到 234KB，減少約 43%，type definitions 從 190KB 降到 90KB，減少約 50%。減少體積的做法之一是提供 `msw/http`、`msw/graphql`、`msw/sse`、`msw/ws` 與 `msw/utils/bypass` 等細分 entrypoint。[GitHub 的 v3.0.0 變更清單](https://github.com/mswjs/msw/pull/2692)另列出 `worker.stop()` 改回傳 Promise、移除 `handleRequest()`、將 GraphQL 匯出改為 `msw/graphql`，以及移除 Node.js 內建 cookie 管理等 breaking changes。[npm release mirror](https://newreleases.io/project/npm/msw/release/3.0.0)的版本資料也列出相同的 Node.js、TypeScript 與 API 變更。
+
+既有 `setupServer` 與 `setupWorker` 仍然可以使用，但官方把兩者視為由 `defineNetwork` 統一實作的相容層。新的 network abstraction 把 network source 和 handler 分開，來源可以是目前 process、遠端 process 或 HAR 檔案，讓測試工具可以重用相同 handlers。`defineNetwork` 目前仍在 experimental 狀態，適合工具作者和測試平台先做整合，不適合在沒有 migration test 的情況下直接取代所有既有設定。
+
+~~~ts
+// 2.x 常見的根 entrypoint
+import { http, HttpResponse } from "msw";
+
+export const handlers = [
+  http.get("/api/user", () => {
+    return HttpResponse.json({ id: "user-1" });
+  }),
+];
+
+// 3.0 可改用更小的 entrypoint
+import { http, HttpResponse } from "msw/http";
+~~~
+
+~~~ts
+import { http, HttpResponse } from "msw/http";
+import { defineNetwork } from "msw/experimental";
+import { HttpRequestInterceptor } from "@mswjs/interceptors/http";
+
+const network = defineNetwork({
+  sources: [new HttpRequestInterceptor()],
+  handlers: [
+    http.get("https://api.example.com/user/:userId", ({ params }) => {
+      return HttpResponse.json({ id: params.userId });
+    }),
+  ],
+});
+~~~
+
+## 快速重點
+
+- [Debezium 3.7 final](https://debezium.io/blog/2026/09/29/debezium-3-7-final-released/)：2026-09-29 正式發布，新增 Debezium CLI、TiDB、Milvus 與 SQLite connector，Debezium Platform 可把 pipeline 部署到 Kubernetes 以外的主機，並加入 PyDebeziumAI 的 LangChain 與 LangGraph 整合。
+- [Debezium 3.7 release series](https://debezium.io/releases/3.7/)：`ExtendedTimestamp` 處理超出單一 INT64 epoch 可表達範圍的時間，`reselect.cache.enabled=true` 可快取重查欄位，JMX LastEvent 改用 `JsonStringEncoder` 後官方一百萬列 snapshot 測試最高提升 PostgreSQL 47%、MySQL 38% throughput。
+- [Cloudflare Sandbox SDK 1.0](https://developers.cloudflare.com/changelog/post/2026-09-30-sandbox-sdk-1-0/)：Durable Object 直接透過 `this.ctx.container` 控制 sandbox，能選 image、instance size、網路權限、snapshot 與 process，0.x 版本的 bug 與 security fixes 維持到 2026-12-31。
+- [Cloudflare 1.0 migration guide](https://developers.cloudflare.com/sandbox/sdk/migrate/changes-in-1-0/)：0.x 到 1.0 的責任從 SDK server 移到 Durable Object class，`exec()` 以 argument array 啟動 process，不會自動使用 shell，也不會替呼叫者重試或設定時間上限。
+- [HydraFusion in VS Code and the GitHub Copilot app](https://github.blog/changelog/2026-09-30-hydrafusion-in-vs-code-and-the-github-copilot-app/)：研究預覽現可在 VS Code 1.140 以上與 Copilot app 使用，會在 single、cascade、critique 三種 workflow 間選擇，並顯示更多進度資訊。
+- [VS Code 1.140 的 agent coordination](https://visualstudiomagazine.com/articles/2026/09/30/vs-code-1-140-expands-agent-coordination-across-folders-and-machines.aspx)：實驗性的 multi-folder session 讓不同 chat 對應不同 repository 或 worktree，remote delegation 可依作業系統、記憶體、處理器與模型可用性選擇主機。
+- [KrakenD 3.0](https://www.krakend.io/blog/krakend-3-series/)：AI Router、Semantic Cache、Prompt Guard、MCP authentication 與 tool filtering 進入新系列，2.x 設定檔的 `version: 3` 必須改成 `version: 4`，Community Edition 也移除多個已棄用元件。
+- [Gemini 4 Argon](https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/)：Google 宣布先透過 Fairwind Program 交付可信任的 cyber defenders，模型輸出上限標示為一百萬 tokens；正式 API 與消費者版本尚未全面開放，benchmark 數字目前屬 Google 公布資料。
+- [CoreWeave Forge](https://www.coreweave.com/news/coreweave-forge-launches-turning-the-ai-loop-production-run-into-a-better-model-and-agent)與 [NVIDIA 的 Vera Rubin 說明](https://blogs.nvidia.com/blog/coreweave-agentic-ai-vera-rubin/)：訓練、評估、inference、sandbox 與 agent observability 被放進同一個 AI development environment，RL Rollouts 可在 live deployment 載入新 checkpoint，效能數字應視為供應商 benchmark。
+- [Stack Internal GA](https://stackoverflow.blog/2026/09/30/anyone-can-start-building-verified-knowledge-with-stack-internal/)：Stack Overflow 將知識匯入 API、MCP Server、provenance、recency、corroboration、SME validation、permissions 與 exportable audit trails 放進一般可用版本。
+- [DocumentDB v1.0 RC1](https://newreleases.io/project/github/documentdb/documentdb/release/v1.0-RC1)：9 月 28 日發布第一個 release candidate，但官方提醒只供測試，不支援 RC 之間或 0.117 到 RC 的升級，`latest` image 仍停在 0.117-0。
+- [MariaDB Foundation TAF 4.0](https://mariadb.org/mariadb-foundations-test-automation-framework-taf-4-0-release/)：TAF 新增 PostgreSQL beta、內嵌資料庫設定、每個 test case 的可重現 properties 與結果 provenance，並加入 `--test-case-tag`、`--dump-run-state` 等選項。
+- [GPT-6.1 Sol in GitHub Copilot](https://github.blog/changelog/2026-09-29-gpt-6-1-sol-in-github-copilot/)：模型在 Copilot 逐步開放給 Pro+、Max、Business 與 Enterprise，涵蓋 VS Code、Copilot CLI、coding agent、JetBrains、Xcode 與 Eclipse，企業管理者可用 model policy 控制存取。
+
+## 細節說明
+
+### TanStack Start 的修補邊界與部署檢查
+
+這個漏洞的風險來自瀏覽器把攻擊者控制的內容視為受信任 origin 的 HTML，而不是單純在錯誤頁面顯示一段字串。攻擊者不需要登入，必要條件是有一個使用者點擊特製連結。若該使用者已登入，惡意腳本就能以該使用者的前端權限呼叫同 origin 資源，影響範圍取決於該使用者的 session 和應用程式授權模型。這也是 CVSS 把 user interaction 標成 Required，但 confidentiality 與 integrity 仍評為 High 的原因。`httpOnly` cookie 可以降低 cookie 直接被讀取的風險，不能阻止腳本代替使用者呼叫應用程式端點。
+
+修補時應查 lockfile 的實際解析結果，因為 workspace、overrides、resolutions 或 transitive dependency 都可能讓 `package.json` 看起來安全，實際安裝仍保留舊版。升級後要在 CI 重新建置，確認產出的 server bundle 使用 `@tanstack/start-server-core` 1.169.39 或更新版本，再檢查 CDN 或平台是否真的切換到新部署。若暫時需要 edge rule，預設路徑可以檢查 `x-tsr-serverFn: true`、`Sec-Fetch-Mode: navigate` 和 `Accept: text/html`，但 header 是使用者可偽造的，所以它只能降低瀏覽器點擊攻擊，不是修補。若自訂 `serverFns.base`，預設規則也不會自動覆蓋新路徑。安全回歸測試應涵蓋正常的 GET、POST、CORS preflight 和自訂 server-function path，避免把合法呼叫一起擋掉。
+
+### WSL containers 的開發與企業管理界線
+
+WSL containers GA 把容器工作從個別 Docker Desktop 設定帶到 Windows 原生可管理的 WSL 功能。`wslc` 能提供較接近 Docker 使用者習慣的命令，也能由 Windows 應用程式透過 API 建立本機 AI 或 cloud-native 工作環境。對 VS Code dev containers、.NET Aspire 和桌面型容器管理工具來說，這意味著可以把 `wslc` 當成一個可選的 container driver，而不必另行維護一個完全不同的 Linux VM 入口。Microsoft 同時加入健康檢查、事件串流與網路 attach/detach，讓本機環境有更清楚的狀態觀測。
+
+企業功能的核心不是命令數量，而是 image provenance 和主機側可見性。Intune 的 registry allow list 可以限制開發者能拉取的來源，MDE 可以把容器內事件連回 Windows host 的調查流程。這仍然不等同於完整的 image signing policy、runtime admission 或 Kubernetes 叢集治理，團隊需要把它和既有 registry、SBOM 與 endpoint policy 分開驗證。Windows 檔案存取最高約兩倍的速度提升是 Microsoft 的特定測試結果，跨專案的 bind mount、大量小檔案和 I/O 混合負載仍應自行測量。`wslc compose` 尚未 GA，因此現有 Compose workflow 不能假設會由本版本直接接手。
+
+### EDG 公開後，真正要測的是相容性和供應鏈
+
+EDG front end 的公開對 C++ 工具鏈有兩層影響。第一層是 parser 和 semantic analysis 的可重用性，團隊可以研究完整的 declaration、statement、expression tree，而不是只接收編譯器最後的 diagnostics。第二層是 source-to-source 和 cross compiler 工具，官方提供 C-generating 與 C++-generating back end，還保留 source line、column、original type 和 original name 等資訊。這些能力對 refactoring、程式碼轉換、靜態檢查與多 dialect compatibility test 都很實用。EDG repository 的 README 也把 bug emulation、可配置性和文件完整度列為主要特點。
+
+導入不應從"能不能編譯一個小程式"開始，而要建立自己的 compatibility corpus。測試集合至少要涵蓋 concepts、modules、template instantiation、宏、MSVC/GNU/Clang extension、C++/CLI、診斷文字與 source-to-source 輸出。要把 front end 的版本、host toolchain、C++ standard flag 和後端組合鎖進可重現 build，否則同一份 IL 在不同 host dependency 上可能得到不同結果。授權也要單獨審查，Phoronix 的報導和 repository 顯示的 metadata 不完全是同一層資訊，正式產品必須以版本內的 license files 和第三方依賴清單為準。這次開源的技術價值很高，但它不會自動解決維護人力、測試時間或下游 ABI 風險。
+
+### MSW 3.0 的 breaking changes 會先落在 CI 和 test runner
+
+MSW 3.0 的 ESM-only 變更會直接影響仍使用 CommonJS、Node.js 20 或舊 TypeScript 的測試環境。匯入路徑改成 `msw/http` 和 `msw/graphql` 後，bundler、test runner 和 TypeScript module resolution 都必須實際跑過一次完整測試。`worker.stop()` 改回傳 Promise 也會影響 teardown，如果測試在 stop 完成前就關閉 page 或 process，可能產生間歇性錯誤。Node.js 的 cookie 行為改為遵循執行環境預設值，依賴 MSW 自動回傳 mocked cookie string 的測試需要重新檢查。`defineNetwork` 目前仍是 experimental，最穩妥的做法是先讓工具套件支援新 API，再保留 `setupServer` 與 `setupWorker` 的相容路徑。
+
+這個版本的 network architecture 也讓攔截層更接近 socket 和 protocol parser。官方說明指出，新 Interceptors 不再 patch request client、internal class 或 agent，而是從 TCP 與 TLS wrapper 讀取資料，再交給 HTTP 等 protocol parser 判斷。這使 Node.js 端可以處理比傳統 fetch mock 更廣的網路來源，但也代表自訂 interceptor 必須面對 raw connection、parser state 和錯誤清理。升級驗證不能只跑單元測試，應加入 WebSocket、GraphQL subscription、form submission、page navigation 和未處理 request 的整合測試。
+
+## 版本、RFC 與提案追蹤
+
+- [TanStack Start GitHub security advisory](https://github.com/TanStack/router/security/advisories/GHSA-qx66-fv34-fjm8)：追蹤受影響版本、CVE 欄位、後續 backport 與 edge mitigation 更新。
+- [TanStack Start 官方修補公告](https://tanstack.com/blog/tanstack-start-security-update-cve-2026-102989)：追蹤四個 npm 套件的修補版本與重新部署要求。
+- [WSL containers 官方文章](https://blogs.windows.com/windowsdeveloper/2026/09/29/wsl-containers-now-generally-available/)：追蹤 `wslc compose`、cross-OS file performance 與企業 registry policy。
+- [EDG compiler repository](https://github.com/edgcpp/compiler)：追蹤 license files、build instructions、release tags、CI matrix 和 contribution guide。
+- [CPFE 7.0 documentation](https://edgcpp.org/doc/)：追蹤 C++23/24 dialect coverage、IL schema 與 front end API 文件。
+- [MSW 3.0 migration information](https://mswjs.io/docs/migrations/)：追蹤 `defineNetwork` 何時離開 experimental，以及 v2 到 v3 的逐項 migration。
+- [MSW v3.0.0 change list](https://github.com/mswjs/msw/pull/2692)：追蹤 Node.js、TypeScript、GraphQL 與 WebSocket API 的後續調整。
+- [Debezium 3.7 release series](https://debezium.io/releases/3.7/)：追蹤 3.7 bugfix、connector compatibility 與 3.8 roadmap。
+- [Cloudflare Sandbox SDK migration guide](https://developers.cloudflare.com/sandbox/sdk/migrate/changes-in-1-0/)：追蹤 0.x 維護期限、container API、snapshot 與 outbound handler 的行為。
+- [KrakenD 3.0 release](https://www.krakend.io/blog/krakend-3-series/)：追蹤 config version 4、AI Router classifier、MCP protocol coverage 和外部 secrets management。
+- [Gemini 4 Argon 官方公告](https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/)：追蹤 Fairwind Program、API 開放時間、實際價格與第三方 benchmark 復現。
+- [DocumentDB v1.0 RC1](https://newreleases.io/project/github/documentdb/documentdb/release/v1.0-RC1)：追蹤 RC2、升級政策、package repository 和 final image tag。
+
+## 參考來源表
+
+| 主題 | 來源與日期 | 來源類型 |
+| --- | --- | --- |
+| TanStack Start 官方安全公告 | [TanStack Start security update: CVE-2026-102989](https://tanstack.com/blog/tanstack-start-security-update-cve-2026-102989)（2026-09-30，免費） | 專案官方部落格 |
+| TanStack GitHub advisory | [Unauthenticated reflected XSS in TanStack Start server-function responses](https://github.com/TanStack/router/security/advisories/GHSA-qx66-fv34-fjm8)（2026-09-30，免費） | GitHub Security Advisory |
+| Appwrite 技術說明 | [TanStack Start XSS (CVE-2026-102989): what to do on Appwrite](https://appwrite.io/blog/post/tanstack-start-server-function-xss)（2026-10-01，免費） | Appwrite |
+| WSL containers GA | [WSL containers is now generally available](https://blogs.windows.com/windowsdeveloper/2026/09/29/wsl-containers-now-generally-available/)（2026-09-29，免費） | Microsoft Windows Developer Blog |
+| WSL release history | [Releases · microsoft/WSL](https://github.com/microsoft/WSL/releases)（查閱 2026-10-01，免費） | GitHub repository |
+| EDG 開源轉型 | [Open Source Transition](https://edgcpp.org/)（2026-09-30，免費） | EDGCPP |
+| EDG 技術背景 | [The C++ Front End](https://edg.com/c)（查閱 2026-10-01，免費） | Edison Design Group |
+| EDG 公開報導 | [EDG C/C++ Front-End Open-Sourced](https://www.phoronix.com/news/EDG-CPP-Open-Sourced)（2026-09-30，免費） | Phoronix |
+| EDG compiler repository | [edgcpp/compiler](https://github.com/edgcpp/compiler)（查閱 2026-10-01，免費） | GitHub repository |
+| EDG 文件 | [CPFE 7.0 documentation](https://edgcpp.org/doc/)（查閱 2026-10-01，免費） | EDGCPP |
+| MSW 3.0 官方公告 | [Introducing MSW 3.0](https://mswjs.io/blog/introducing-msw-3.0)（2026-09-30，免費） | Mock Service Worker |
+| MSW 3.0 變更清單 | [feat!: v3.0.0](https://github.com/mswjs/msw/pull/2692)（查閱 2026-10-01，免費） | GitHub pull request |
+| MSW npm 版本資料 | [msw 3.0.0](https://newreleases.io/project/npm/msw/release/3.0.0)（2026-09-28，免費） | NewReleases |
+| Debezium 3.7 公告 | [Debezium 3.7 Release Summary](https://debezium.io/blog/2026/09/29/debezium-3-7-final-released/)（2026-09-29，免費） | Debezium |
+| Debezium 3.7 release series | [Debezium Release Series 3.7](https://debezium.io/releases/3.7/)（查閱 2026-10-01，免費） | Debezium documentation |
+| Cloudflare Sandbox SDK | [Sandbox SDK 1.0: control every sandbox from your own Durable Object](https://developers.cloudflare.com/changelog/post/2026-09-30-sandbox-sdk-1-0/)（2026-09-30，免費） | Cloudflare Changelog |
+| Cloudflare migration | [Changes in Sandbox SDK 1.0](https://developers.cloudflare.com/sandbox/sdk/migrate/changes-in-1-0/)（更新 2026-09-30，免費） | Cloudflare documentation |
+| HydraFusion Changelog | [HydraFusion in VS Code and the GitHub Copilot app](https://github.blog/changelog/2026-09-30-hydrafusion-in-vs-code-and-the-github-copilot-app/)（2026-09-30，免費） | GitHub Changelog |
+| HydraFusion 技術報導 | [HydraFusion multi-model orchestration lands in VS Code and Copilot app](https://cloudninjas.ca/ai/hydrafusion-multi-model-orchestration-lands-in-vs-code-and-copilot-app/)（2026-09-30，免費） | CloudNinjas |
+| VS Code 1.140 報導 | [VS Code 1.140 Expands Agent Coordination Across Folders and Machines](https://visualstudiomagazine.com/articles/2026/09/30/vs-code-1-140-expands-agent-coordination-across-folders-and-machines.aspx)（2026-09-30，免費） | Visual Studio Magazine |
+| KrakenD 3.0 | [KrakenD 3.0 Is Here: AI Router, Semantic Cache, and On-the-Fly Stream Manipulation](https://www.krakend.io/blog/krakend-3-series/)（2026-09-30，免費） | KrakenD |
+| Gemini 4 Argon | [Gemini 4 Argon: our next era of frontier intelligence](https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/)（2026-09-30，免費） | Google DeepMind |
+| CoreWeave Forge | [CoreWeave Forge Launches](https://www.coreweave.com/news/coreweave-forge-launches-turning-the-ai-loop-production-run-into-a-better-model-and-agent)（2026-09-30，免費） | CoreWeave |
+| NVIDIA Vera Rubin | [From Training to Production, NVIDIA and CoreWeave Close the Loop on Agentic AI](https://blogs.nvidia.com/blog/coreweave-agentic-ai-vera-rubin/)（2026-09-30，免費） | NVIDIA |
+| Stack Internal | [Anyone can start building verified knowledge with Stack Internal](https://stackoverflow.blog/2026/09/30/anyone-can-start-building-verified-knowledge-with-stack-internal/)（2026-09-30，免費） | Stack Overflow |
+| DocumentDB RC1 | [DocumentDB v1.0-RC1](https://newreleases.io/project/github/documentdb/documentdb/release/v1.0-RC1)（2026-09-28，免費） | NewReleases |
+| DocumentDB package index | [DocumentDB packages](https://documentdb.io/packages/)（查閱 2026-10-01，免費） | DocumentDB |
+| MariaDB TAF 4.0 | [MariaDB Foundation's Test Automation Framework (TAF) 4.0 Release](https://mariadb.org/mariadb-foundations-test-automation-framework-taf-4-0-release/)（2026-09-29，免費） | MariaDB Foundation |
+| GPT-6.1 Sol | [GPT-6.1 Sol in GitHub Copilot](https://github.blog/changelog/2026-09-29-gpt-6-1-sol-in-github-copilot/)（2026-09-29，免費） | GitHub Changelog |
+| GitHub September changelog | [09/2026](https://github.blog/changelog/month/09-2026/)（查閱 2026-10-01，免費） | GitHub Changelog |
+
+## 延伸閱讀方向
+
+- Server function response validation、same-origin XSS、CSP 與 edge mitigation 的失效模式
+- WSL container image allow list、MDE telemetry、Compose 相容性與 cross-OS I/O benchmark
+- EDG intermediate language、C++ dialect compatibility、source-to-source transformation 與 compiler licensing
+- MSW ESM migration、Node.js socket interception、GraphQL subscriptions 與 HAR-based network source
+- Debezium 3.7 connector compatibility、ExtendedTimestamp、snapshot throughput 與 CDC pipeline provenance
+- Durable Object container lifecycle、sandbox snapshots、outbound credential brokering 與 untrusted code isolation
+- LLM gateway semantic cache、prompt guard、MCP authorization、model failover 與 stream transformation
+- Agent runtime multi-host delegation、model orchestration workflow、audit trails 與 benchmark reproducibility
