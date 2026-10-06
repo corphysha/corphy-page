@@ -1,0 +1,168 @@
+---
+title: "OpenSSH 10.6、npm Angular typosquat 與 JetBrains Java/Kotlin RC：2026-10-06 技術日報"
+description: "2026-10-06 技術日報：OpenSSH 10.6 的壓縮側錄防護與 post-quantum 簽章、npm Angular 釣魚套件群，以及 JetBrains Java/Kotlin LSP extension release candidate。"
+date: 2026-10-06
+tags: ["daily-digest", "security", "openssh", "npm", "javascript", "java", "kotlin", "github", "devops", "ai-infrastructure"]
+draft: false
+---
+
+*資料截點：2026-10-06 23:09（Asia/Taipei）。本期納入 2026-10-03 23:09 至 2026-10-06 23:09 的新進度，重大消息以官方材料與外部來源交叉核對，前一期日報已報導的事件不重複列入。*
+
+## 重大頭條
+
+### OpenSSH 10.6 停用 LZ77 字典壓縮，並啟用混合式 post-quantum 簽章
+
+[OpenSSH 10.6 官方 release notes](https://www.openssh.org/txt/release-10.6)於 2026-10-06 發布，安全修補包含停用 SSH session 共用的 LZ77 dictionary coder，以降低跨 multiplexed channel 的 chosen-plaintext side-channel 風險。OpenSSH 的 [oss-sec 發布信](https://seclists.org/oss-sec/2026/q4/58)與 [LWN 報導](https://lwn.net/Articles/1098980/)也確認了版本、變更方向與壓縮效能取捨。官方同時表示，專案近期收到大量 AI 輔助的安全報告，之後會暫時採取更頻繁的釋出節奏。
+
+這個變更不是單純把壓縮功能標成 deprecated。攻擊者若能控制一個 SSH channel 的輸入，又能觀察另一個 channel 的密文長度，LZ77 的跨 channel back-reference 可能洩漏被壓縮資料的特徵。10.6 直接關閉這個 dictionary coder，代價是 `Compression` 的效果變差。官方建議把需要壓縮的資料移到 SSH 以外的應用程式層，因為那樣不會共用同一個 SSH compression context。
+
+版本也把混合式 `ssh-mldsa44-ed25519` signature algorithm 改為預設啟用，並移除舊實驗版本使用的 `@openssh.com` vendor suffix。使用舊實驗支援產生的金鑰必須重新產生或移除。`sshd_config` 新增 `WarnWeakCrypto`，預設啟用，用來記錄 client 採用非 post-quantum-safe key agreement 的情況。
+
+其他值得立即檢查的變更包括 `scp -R` 的棄用警告、GSSAPI 認證失敗後憑證狀態的清理、sftp 遞迴複製路徑驗證，以及 OpenSSH private key KDF 預設 rounds 從 24 提高到 32。`scp -R` 現在仍可運作，但未來會被忽略，因此依賴遠端主機執行 `scp` 的部署腳本不應再把它當成長期介面。安全修補也限制命令列 username 中的 `$` 與反斜線，降低未信任輸入進入 `ProxyCommand` 或 `Match exec` shell context 的機會。
+
+### Angular 名稱變形套件在 npm 執行未驗證的 install script
+
+[OSV 的 MAL-2026-17493](https://osv.dev/vulnerability/MAL-2026-17493)記錄了 `@angularr/core@1.0.67`，它只把官方 `@angular/core` 改成一個容易誤輸入的 scope，並在 `preinstall` 中把遠端內容直接送進 Node.js。[OSV 的 MAL-2026-17536](https://osv.dev/vulnerability/MAL-2026-17536)則記錄 `@angulaar/cli@22.2.1`，其名稱與版本都模仿 Angular CLI。這批報告可在 [OpenSSF malicious-packages repository](https://github.com/ossf/malicious-packages)找到原始 OSV 格式，外部整理與回應建議則見 [O3 Security 的個案](https://o3.security/malware/npm/%40nagular/core)及 [CrazycodersLab 的調查](https://crazycoderslab.com/angular-npm-typosquat-packages-web-archive-postinstall-2026/)。
+
+這不是只會造成錯誤 import 的空套件。OSV 記錄的 `@angularr/core` 會在 `npm install` 期間執行一段未釘選、未做完整性驗證的遠端載入命令，來源經過 `web.archive.org` 指向 `gitflic.ru` 的使用者路徑。安裝者不需要 import 套件，也不需要啟動應用程式，lifecycle hook 就可能以安裝者權限執行。`@angulaar/cli` 的另一種手法是複製真正 CLI 的 README、授權標頭與原始碼，再修改 manifest 的依賴關係，讓名稱檢查和簡單的版本檢查都更容易失效。不過，[al-ice.ai 的獨立查核](https://al-ice.ai/posts/2026/10/amazon-inspector-angular-cli-mcp-sdk-rename-false-positive/)指出，OSV 內容把官方的 `@modelcontextprotocol/server` 誤判為不存在的套件名稱，該依賴本身不能當成惡意證據。`@angulaar/cli` 仍因名稱冒充與複製來源而應被移除，但 incident response 應把套件身分、發佈者與依賴內容分開驗證。
+
+[CrazycodersLab](https://crazycoderslab.com/angular-npm-typosquat-packages-web-archive-postinstall-2026/)整理出 2026-10-04 至 2026-10-05 的兩波 Angular lookalike 套件，數量至少 16 個，許多套件直接使用真正 Angular 的 `22.2.1` 版本號。這個數量是外部調查的彙整，不代表 npm 公布了受影響的下載量。報導指出，抽查到的套件後來已從 registry 移除，但移除只能阻止新的解析，不會清除已寫入 lockfile 的內容，也不會撤銷已經執行過的 install script。
+
+處理方式要分成偵測、隔離與憑證回收。先掃描 lockfile、CI cache 和 build artifact 中的 package name 與載入網址，再把曾經安裝過惡意版本的 runner 視為需要重建的主機。CI 可以先使用 `npm ci --ignore-scripts`，對確實需要 native build 的套件採取明確 allowlist，而不是讓整個 dependency tree 都能執行 lifecycle hook。若主機或 runner 曾經讀得到 npm token、GitHub token、cloud credential、SSH key 或 `.env`，旋轉憑證的優先級高於刪除套件。
+
+### JetBrains Java and Kotlin by IntelliJ IDEA 進入 release candidate
+
+[JetBrains 官方公告](https://blog.jetbrains.com/idea/2026/10/java-and-kotlin-by-intellij-idea-the-lsp-based-extension-reaches-release-candidate/)在 2026-10-06 宣布，Java and Kotlin by IntelliJ IDEA 由 preview 進入最後一個 Early Access Program build，也就是 release candidate。套件可從 [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=JetBrains.intellij-server)與 [Open VSX Registry](https://open-vsx.org/extension/JetBrains/intellij-server)安裝。JetBrains 表示，兩個發佈目錄合計下載量已超過 20,000 次。
+
+這個 extension 將 IntelliJ IDEA 的 Java 與 Kotlin language intelligence 透過 LSP 帶到 VS Code、Cursor 和其他相容的第三方編輯器。RC 的能力不只包含 completion、navigation、inspection、quick-fix 與 code analysis，還涵蓋 project-wide refactoring、DAP-based debugging、Maven、Gradle、Bazel、內建測試執行與 Spring tooling interoperability。這使它比較接近可使用的 JVM language service，而不是只把語法著色搬到另一個編輯器。
+
+對 coding agent 來說，關鍵是 Cursor Agent 可以使用同一個 language server 做 semantic code search、navigation 與 analysis。這種做法把 agent 的查找依據放在 project-wide 的型別與符號資訊上，減少只靠文字搜尋猜測呼叫關係的情況。它不代表 agent 自動得到完整 IntelliJ workflow，實際結果仍會受 build model、索引完成狀態、JDK 和外掛相容性影響。
+
+RC 版本可依 EAP 條款免費使用 30 天。穩定版推出後，新使用者有 30 天試用期，之後需要 IntelliJ IDEA Ultimate 訂閱。團隊若要導入，應先在實際的 multi-module Gradle 或 Maven repository 測試索引時間、增量編譯、測試執行、debug adapter 與 agent 的查詢結果，再處理授權與編輯器標準化，而不是只在小型範例專案上判斷效果。
+
+## 快速重點
+
+- [GitHub Secret scanning 新增 detectors](https://github.blog/changelog/2026-10-05-secret-scanning-adds-detectors-for-lovable-supabase-and-more/)：2026-10-05 新增 Lovable 的 `lovable_api_key`，以及 Pydantic Services 的 `logfire_token`、`pydantic_ai_gateway_api_key`，並加入 Supabase OAuth 與 scoped personal access token。
+- [GitHub AI Scan coverage status](https://github.blog/changelog/2026-10-06-code-scanning-ai-scan-enablement-status-in-security-overview/)：Security overview 現在顯示各 repository 是否啟用 AI Scan for pull requests，可用 `code-scanning-ai-scan-pr-scan:enabled` 與 `not-enabled` 篩選，CSV export 也增加欄位。
+- [GitLab governed software factory](https://www.financialcontent.com/article/bizwire-2026-10-6-gitlab-announces-the-foundation-for-the-governed-software-factory)：GitLab 宣布 Artifact Central beta、Dependency Firewall early access、GitLab Security Standard 與 Duo Agent Platform Impact Analytics；其中 Orbit 的 retry 與 token 數字是 GitLab 自行公布的結果。
+- [Anaconda agent swarms 與 AI security testing](https://siliconangle.com/2026/10/06/anaconda-expands-beyond-python-with-agent-swarms-and-ai-security-testing/)：Anaconda 把 Kilo Code、Enkrypt 與 Outerbounds 的能力整合進企業平台，包含多 agent message board、超過 300 類攻擊測試與 least-privilege 預設；相關採用率和風險比例是公司或收購團隊提供的資料。
+- [New Relic Ground Truth CLI](https://www.pubt.io/view/883D3CCA7CD7C7960F6CB17514007EA58D3FBE6B)：新 CLI 預計 2026-10-08 進入 limited preview，連接 Autopilot、NerdGraph 和 memory APIs，讓人員與 agent 從 terminal 取得事件證據與 recovery criteria。
+- [AWS MCP Server 擴展到六個區域](https://aws.amazon.com/about-aws/whats-new/2026/10/aws-mcp-server-six-additional-regions/)：新增 Singapore、Sydney、Tokyo、Ireland、London 與 Oregon endpoint，重點是降低延遲和支援資料落地需求。
+- [AWS Continuum for Penetration Testing](https://aws.amazon.com/about-aws/whats-new/2026/10/aws-continuum-penetration-testing/)：公開預覽把 continuous penetration testing 接進 CI/CD，pipeline 可收到 finding、修補提示與自動重測結果。
+- [AWS Advanced Ruby Driver Wrapper](https://aws.amazon.com/about-aws/whats-new/2026/10/aws-ruby-driver-wrapper-available/)：RDS 與 Aurora PostgreSQL、MySQL-compatible 資料庫的 Ruby wrapper 正式可用，提供 switchover、failover 監看與 Secrets Manager、IAM token 認證。
+- [rust-analyzer 2026-10-05](https://newreleases.io/project/github/rust-lang/rust-analyzer/release/2026-10-05)：發布 `v0.3.3073`，可從 release metadata 追蹤 commit 與產物。
+- [Electron 2026-10-05 release history](https://releases.electronjs.org/history/2026-10-05)：Electron 45.0.0-alpha.15 使用 Chromium 156、Node.js 24.21.0，46.0.0-nightly.20261005 也同步更新。
+- [Flirt 開源](https://blog.buenzli.dev/flirt-is-open-source)：這個 local-first review tool 針對會持續 amend、rebase 和 force-push 的 patch series workflow，記住上次 review 並只顯示差異。
+- [ClickHouse 26.9.10.4 stable](https://www.changes.watch/updates/clickhouse-2026-10-04-release-v26-9-10-4-stable)：2026-10-04 的 stable release 已被 release tracker 記錄，正式升級前仍應回到上游 changelog 核對完整變更。
+
+## 細節說明
+
+### OpenSSH 10.6 的升級邊界與設定檢查
+
+OpenSSH 10.6 的 LZ77 變更對一般單一 channel 連線不一定會造成明顯差異，但對同一 session 中混合可信與不可信資料的 multiplexed workflow 具有直接意義。官方引用的 [Crossing the Streams preprint](https://arxiv.org/abs/2609.07709)描述了如何利用共用 compression dictionary 讓攻擊者控制的輸入反映到密文長度。這是 side-channel mitigation，不是把 SSH 加密本身換掉。升級後仍可使用 `Compression yes`，但壓縮器不再使用原本的 LZ77 dictionary coder，因此吞吐量和壓縮率都可能下降。對需要大量傳輸的 backup 或 artifact workflow，應在應用程式層重新測量，而不是只看 SSH 連線是否成功。
+
+`ssh-mldsa44-ed25519` 的預設啟用則牽涉到金鑰生命週期。10.6 不再使用舊實驗實作的 vendor suffix，舊實驗金鑰不能直接當成新名稱的長期部署材料。升級前可以在測試環境列出本機支援的演算法，並檢查 bastion、CI runner、FIDO token 與憑證簽發流程是否還依賴舊金鑰。`WarnWeakCrypto` 的價值在於把非 post-quantum-safe key agreement 留在可觀測的 server log 中，方便先盤點 client，再決定是否收緊 allowlist。
+
+10.6 也把幾個常被忽略的邊界條件放進同一個版本。GSSAPI 失敗後不再把憑證狀態留給後續成功的認證流程，sftp 會更嚴格檢查 server 回傳的路徑，`authorized_keys` 的 `restrict` 也會正確套用到 tunnel forwarding。OpenSSH private key 的 KDF round 上限避免惡意金鑰讓解析工作無限拖長，預設 rounds 從 24 提高到 32 則會增加正常載入成本。這些變更不一定在整合測試中顯眼，應把失敗認證、agent forwarding、sftp 遞迴複製與 key rotation 放進升級矩陣。
+
+可先把容易受影響的腳本改成明確的本機轉送模式。`scp -R` 在 10.6 仍可使用，但會發出棄用警告，未來版本可能忽略這個選項。
+
+~~~bash
+# 改前。由遠端來源主機執行 scp，依賴遠端 shell 的 quoting 規則。
+scp -R source-host:/srv/releases/app.tar target-host:/srv/releases/
+
+# 改後。由本機 scp 讀取來源，再把資料送到目標主機。
+scp source-host:/srv/releases/app.tar target-host:/srv/releases/
+~~~
+
+若工作負載把不可信輸入和秘密資料放在同一條 SSH multiplexed connection，還應把壓縮設定顯式寫出來，避免 client 與 server 的預設值造成誤判。
+
+~~~ini
+Host build-bastion
+    HostName bastion.example.com
+    User deploy
+    Compression no
+    ControlMaster auto
+    ControlPersist 5m
+~~~
+
+### npm install script 與 lockfile 完整性的落差
+
+這次事件把 package name、版本號、manifest 相似度和 install hook 疊在一起。`@angularr/core` 用一個多出的 `r` 模仿 `@angular/core`，`@angulaar/cli` 則利用多出的 `a` 和真實 CLI 的版本號降低人工檢查的敏感度。OSV 的資料還保留 package archive 的 SHA-256 和 npm reference，這讓 incident response 可以回頭比對 lockfile、cache 或 artifact，而不必重新下載可疑套件。真正危險的不是名稱相似本身，而是名稱相似加上安裝階段自動執行遠端內容。
+
+lockfile 的 integrity 欄位不能單獨解決這種問題。它可以確認你拿到的是 lockfile 指定的 archive，卻不能證明 archive 裡的 `preinstall` 或 `postinstall` 行為符合預期。若惡意套件在它被下架前已經被解析並寫入 lockfile，後續重建仍可能忠實地取回同一份危險內容，除非 registry 已經撤回版本或團隊先清理依賴。這也是為什麼事件處理要同時查 package name、版本、lifecycle script、registry log 和外連紀錄。
+
+CI 的最低限度防線可以先關閉所有 install script，再針對確實需要編譯的依賴建立例外。下面的掃描不會執行可疑程式，只讀取文字檔，適合放在 runner 隔離檢查的第一步。
+
+~~~bash
+# 找出事件中常見的 package name 與 payload 指標
+grep -RInE "gitflic|hellscripter|web\.archive\.org/web/https|@angularr/|@angulra/|@angulaar/|@nagular/|@anfular/|@abgular/|@anguar/|@angulr/|@angjlar/|@angupar/|@anngular/|@qngular/" . \
+  --include=package-lock.json \
+  --include=pnpm-lock.yaml \
+  --include=yarn.lock
+
+# 在 CI 先不要執行 dependency lifecycle scripts
+npm ci --ignore-scripts
+~~~
+
+這個選項可能讓需要 `node-gyp`、WASM 或其他建置步驟的合法套件無法完成安裝，所以應以套件 allowlist 和獨立的 build stage 補足，而不是把 `--ignore-scripts` 當成完整的供應鏈政策。私有 scope 也應在 registry 層固定解析來源，避免只靠版本釘選。若事件主機曾經接觸到簽署金鑰或部署權限，重建 runner、清理持久化工作區、旋轉所有可達憑證，才算完成處理。
+
+### LSP language service 進入 agent 工作流
+
+JetBrains 的 RC 把第三方編輯器支援從單一語言外掛拉到 project-aware language service。Java 和 Kotlin 的語意資訊需要解析 build model、source set、dependency、JDK 與編譯器選項，這些不是單一檔案的 syntax parser 能取代的。官方列出的 Maven、Gradle、Bazel、DAP 和 Spring interoperability 代表它要處理完整 JVM 專案的多個工具邊界。對大型 repository 來說，索引完成時間、記憶體占用和 build model 失敗時的降級行為，比 completion demo 更值得測量。
+
+Cursor Agent 使用同一個 server 做 semantic search 和 navigation，可能改善 agent 對 symbol reference、型別宣告和跨檔案呼叫的定位。這個方向的限制也很清楚。LSP server 能提供語意結果，不代表 agent 一定會正確選擇工具、理解 build failure 或遵守 repository 的架構規則。評估時應記錄 agent 找到定義的成功率、首次修補編譯通過率、索引未完成時的誤判，以及使用不同 JDK 或 build profile 時的行為。
+
+RC 的 30 天 EAP 期限適合拿來做受控試用。測試專案應包含多 module、generated source、Kotlin mixed with Java、Gradle composite build、integration test 和 remote debug。也要確認 VS Code、Cursor 與 Open VSX 的 extension version 是否一致，因為同一個 language server 由不同 marketplace 發佈時，更新延遲可能不同。正式導入前，還要把 stable 版的 IntelliJ IDEA Ultimate 授權要求放進開發環境成本，而不是只比較 extension 是否免費。
+
+## 值得追蹤的版本、RFC 與提案
+
+- [OpenSSH 10.6 release notes](https://www.openssh.org/txt/release-10.6)：追蹤 `ssh-mldsa44-ed25519` 的相容性、`WarnWeakCrypto` 的 log 格式、`scp -R` 最終移除時間與後續較頻繁的安全版本。
+- [Crossing the Streams preprint](https://arxiv.org/abs/2609.07709)：追蹤 SSH multiplexed channels、compression side-channel 與應用程式層壓縮替代方案。
+- [OSV MAL-2026-17493](https://osv.dev/vulnerability/MAL-2026-17493)與 [OpenSSF malicious-packages](https://github.com/ossf/malicious-packages)：追蹤 Angular lookalike 套件的撤回、false positive 修訂、IoC 與 registry 防護。
+- [JetBrains Java and Kotlin RC](https://blog.jetbrains.com/idea/2026/10/java-and-kotlin-by-intellij-idea-the-lsp-based-extension-reaches-release-candidate/)：追蹤 stable 1.0 的發布時間、Ultimate 授權邊界、LSP server API 與 Cursor Agent 的整合變化。
+- [GitHub AI Scan coverage status](https://github.blog/changelog/2026-10-06-code-scanning-ai-scan-enablement-status-in-security-overview/)：追蹤 coverage CSV、組織層採用率與 AI 產生 pull request 的 code scanning 政策。
+- [New Relic Ground Truth CLI announcement](https://www.pubt.io/view/883D3CCA7CD7C7960F6CB17514007EA58D3FBE6B)：追蹤 2026-10-08 limited preview 是否如期、CLI 與 MCP server 的功能分界，以及 recovery criteria 的可稽核格式。
+- [GitLab governed software factory announcement](https://www.financialcontent.com/article/bizwire-2026-10-6-gitlab-announces-the-foundation-for-the-governed-software-factory)：追蹤 Artifact Central 的 Self-Managed 時程、Dependency Firewall 的政策語法與 Orbit GA。
+- [Electron release history](https://releases.electronjs.org/history/2026-10-05)：追蹤 Chromium 156、Node.js 24.21.0 與 Electron 45、46 之間的 native module 相容性。
+
+## 參考來源表
+
+| 主題 | 來源與日期 | 來源類型 |
+| --- | --- | --- |
+| OpenSSH 10.6 官方 release notes | [OpenSSH 10.6](https://www.openssh.org/txt/release-10.6)（2026-10-06，免費） | 專案官方 |
+| OpenSSH 10.6 發布信 | [Announce: OpenSSH 10.6 released](https://seclists.org/oss-sec/2026/q4/58)（2026-10-06，免費） | oss-sec mailing list |
+| OpenSSH 10.6 外部報導 | [OpenSSH 10.6 released](https://lwn.net/Articles/1098980/)（2026-10-06，免費） | LWN |
+| SSH compression side-channel 論文 | [Crossing the Streams](https://arxiv.org/abs/2609.07709)（2026，免費預印本） | arXiv |
+| Angular lookalike package | [MAL-2026-17493: @angularr/core](https://osv.dev/vulnerability/MAL-2026-17493)（2026-10-03 發布，免費） | OSV / Amazon Inspector |
+| Angular CLI lookalike package | [MAL-2026-17536: @angulaar/cli](https://osv.dev/vulnerability/MAL-2026-17536)（2026-10-05 發布，免費） | OSV / Amazon Inspector |
+| 惡意套件原始資料集 | [OpenSSF malicious-packages](https://github.com/ossf/malicious-packages)（查閱 2026-10-06，免費） | OpenSSF |
+| `@nagular/core` 個案 | [@nagular/core malicious package](https://o3.security/malware/npm/%40nagular/core)（2026-10-03 發布、2026-10-05 更新，免費） | O3 Security |
+| Angular typosquat 調查 | [Angular Typosquats on npm](https://crazycoderslab.com/angular-npm-typosquat-packages-web-archive-postinstall-2026/)（2026-10-05，免費） | CrazycodersLab |
+| OSV rationale 的獨立查核 | [The Malware Advisory That Flagged Angular's Real MCP Dependency](https://al-ice.ai/posts/2026/10/amazon-inspector-angular-cli-mcp-sdk-rename-false-positive/)（2026-10-05，免費） | al-ice.ai |
+| Java/Kotlin LSP extension RC | [Java and Kotlin by IntelliJ IDEA reaches Release Candidate](https://blog.jetbrains.com/idea/2026/10/java-and-kotlin-by-intellij-idea-the-lsp-based-extension-reaches-release-candidate/)（2026-10-06，免費） | JetBrains Blog |
+| Visual Studio Marketplace | [JetBrains.intellij-server](https://marketplace.visualstudio.com/items?itemName=JetBrains.intellij-server)（查閱 2026-10-06，免費） | Microsoft marketplace |
+| Open VSX Registry | [JetBrains/intellij-server](https://open-vsx.org/extension/JetBrains/intellij-server)（查閱 2026-10-06，免費） | Open VSX Registry |
+| GitHub Secret scanning | [Secret scanning adds detectors for Lovable, Supabase, and more](https://github.blog/changelog/2026-10-05-secret-scanning-adds-detectors-for-lovable-supabase-and-more/)（2026-10-05，免費） | GitHub Changelog |
+| GitHub AI Scan | [Code scanning AI Scan enablement status](https://github.blog/changelog/2026-10-06-code-scanning-ai-scan-enablement-status-in-security-overview/)（2026-10-06，免費） | GitHub Changelog |
+| GitLab 軟體工廠治理 | [GitLab Announces the Foundation for the Governed Software Factory](https://www.financialcontent.com/article/bizwire-2026-10-6-gitlab-announces-the-foundation-for-the-governed-software-factory)（2026-10-06，免費新聞稿） | Business Wire / FinancialContent |
+| Anaconda agent swarms | [Anaconda expands beyond Python with agent swarms and AI security testing](https://siliconangle.com/2026/10/06/anaconda-expands-beyond-python-with-agent-swarms-and-ai-security-testing/)（2026-10-06，免費） | SiliconANGLE |
+| New Relic Ground Truth CLI | [New Relic Introduces New Relic Ground Truth CLI](https://www.pubt.io/view/883D3CCA7CD7C7960F6CB17514007EA58D3FBE6B)（2026-10-06，免費新聞稿） | New Relic / Public |
+| AWS MCP Server | [The AWS MCP Server is now available in six additional AWS Regions](https://aws.amazon.com/about-aws/whats-new/2026/10/aws-mcp-server-six-additional-regions/)（2026-10，免費） | AWS What's New |
+| AWS penetration testing | [AWS Continuum for Penetration Testing](https://aws.amazon.com/about-aws/whats-new/2026/10/aws-continuum-penetration-testing/)（2026-10，免費） | AWS What's New |
+| AWS Ruby Driver Wrapper | [AWS Advanced Ruby Driver Wrapper is generally available](https://aws.amazon.com/about-aws/whats-new/2026/10/aws-ruby-driver-wrapper-available/)（2026-10，免費） | AWS What's New |
+| rust-analyzer | [rust-analyzer 2026-10-05](https://newreleases.io/project/github/rust-lang/rust-analyzer/release/2026-10-05)（2026-10-05，免費） | GitHub release metadata mirror |
+| Electron | [2026-10-05 Electron Releases](https://releases.electronjs.org/history/2026-10-05)（2026-10-05，免費） | Electron release history |
+| Flirt | [Flirt is now Open-Source](https://blog.buenzli.dev/flirt-is-open-source)（2026-10-05，免費） | 專案作者公告 |
+| ClickHouse | [Release v26.9.10.4-stable](https://www.changes.watch/updates/clickhouse-2026-10-04-release-v26-9-10-4-stable)（2026-10-04，免費） | Release tracker |
+
+## 延伸閱讀方向
+
+- SSH multiplexed channel、compression side-channel、post-quantum signature 與金鑰輪替
+- OpenSSH `scp -R` 遷移、GSSAPI state cleanup、FIDO `credProtect` 與 agent socket 隔離
+- npm lifecycle scripts、registry scope policy、lockfile provenance 與 CI runner 重建
+- OSV schema、OpenSSF malicious package analysis、typosquat 偵測與 false positive 流程
+- LSP language server 的 project model、symbol index、DAP debugging 與 coding agent 工具選擇
+- GitHub AI Scan coverage、secret scanning partner program 與 pull request code scanning 稽核
+- MCP server red teaming、least privilege、agent message board 與 runtime policy enforcement
+- Headless observability、recovery criteria、incident evidence 保存與 terminal-first SRE workflow
