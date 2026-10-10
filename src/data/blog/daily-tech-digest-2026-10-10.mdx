@@ -1,0 +1,140 @@
+---
+title: "Tensorlake npm 供應鏈入侵、Gemini agent 與 AWS 機器人工具鏈：2026-10-10 技術日報"
+description: "Tensorlake 0.5.144 遭植入竊密程式、Google 發表企業 Gemini agent、AWS 公開 Physical AI Toolchain，以及 Genkit Dart 1.0 的穩定與實驗性 API 邊界。"
+date: 2026-10-10
+tags: ["daily-digest", "security", "ai-agents", "npm", "google-cloud", "aws", "robotics", "dart"]
+draft: false
+---
+
+*資料截點：2026-10-10 12:00，Asia/Taipei。消息窗口為 2026-10-07 12:00 至截點；排除前一期已報導事件。*
+
+## 重大頭條
+
+### Tensorlake 0.5.144 遭植入 Shai-Hulud，安裝 SDK 即可能暴露主機憑證
+
+[Socket](https://www.socket.dev/blog/tensorlake-compromise)與[Aikido](https://www.aikido.dev/blog/tensorlake-npm-package-compromised)於 10 月 8 日分別公布分析，確認 npm 套件 `tensorlake@0.5.144` 含有 ChainDrop／Shai-Hulud 類型的竊密與自我傳播程式。[The Register](https://www.theregister.com/security/2026/10/08/shai-hulud-worm-makes-jump-to-ai-infrastructure-with-tensorlake-compromise/5302054)報導該版本已被移除，並指出實際影響規模仍未知。Socket 記錄的發布時間為 10 月 8 日 01:12:07 UTC，偵測時間為 01:23:10 UTC。套件每週約 12,000 次下載是整體使用量，不是惡意版本下載數，更不是確認感染數。
+
+攻擊不需要應用程式先匯入 SDK。當安裝環境允許 lifecycle scripts，套件中的 `preinstall` 會啟動 `lib/setup.mjs`，再透過 Bun 執行 `lib/Math_Symbol.js`。依研究團隊分析，程式會蒐集本機與 CI 憑證、建立持久化機制，並支援遠端提供的程式碼。Tensorlake 的執行沙箱不能保護安裝 SDK 的開發工作站或建置主機，因為惡意程式在進入沙箱之前就已執行。
+
+這起事件的直接維運重點，是確認哪些環境曾安裝該版本並執行安裝腳本。刪除依賴不能證明主機已清理。研究也發現監控 GitHub token 的機制，特定條件下撤銷 token 會觸發破壞性行為。事件應變須先隔離、保全證據並處理監控與持久化程式，再從乾淨環境撤銷及替換暴露憑證；不能把一般的「立刻輪替 token」建議直接套用到仍受控制的主機。
+
+為何重要：AI 沙箱隔離與軟體供應鏈安全是兩個不同問題。即使生成程式碼完全在隔離環境執行，SDK 安裝階段仍可能以建置程序的權限讀取機密。
+
+### Google 發表 Gemini agent，企業部署焦點轉向身分、權限與成本控制
+
+Google 於 10 月 8 日[宣布 Gemini agent](https://blog.google/innovation-and-ai/infrastructure-and-cloud/google-cloud/gemini-at-work/)，將工作規劃、工具使用、企業系統連接及模型選擇整合到同一個代理體驗。[TechCrunch](https://techcrunch.com/2026/10/08/google-brings-agentic-ai-to-gemini-starting-with-businesses/)與[SiliconANGLE](https://siliconangle.com/2026/10/08/google-cloud-introduces-gemini-agent-to-change-enterprise-work/)分別報導其產品設計。這是企業代理產品的宣布，不宜直接解讀為所有帳號、地區與連接器已全面開放。
+
+TechCrunch 報導，Gemini agent 可連接 Workspace、Microsoft 365、Slack、Jira、Git 與資料平台，並可透過 MCP 與其他系統互動。使用者能在 tasks inbox 查看進度及子代理工作。Google 也展示讓代理擁有自己的 Workspace 帳號與電子郵件位址，操作紀錄歸屬代理而不是冒用人的身分。這些是產品公布的能力，本文未對實際租戶進行端到端測試。
+
+模型選擇不再限於單一供應商。依媒體報導，產品可選擇 Gemini 與 Anthropic Claude，其他模型屬後續規畫。SiliconANGLE 另報導專案層級支出上限，達到上限時代理暫停，恢復需要接受超出預算。這使導入評估不能只比較模型單次回答品質，還要檢查長時間工具呼叫的成本、資料存取範圍與操作可追溯性。
+
+為何重要：代理若能建立文件、執行程式碼或改動業務資料，就需要獨立的服務身分、最小權限與明確的寫入核准流程。產品支援 MCP 不等於任意 MCP server 都值得信任，連接器權限與工具輸入仍須逐一審查。
+
+### AWS 公開 Physical AI Toolchain，公告願景與可部署元件仍有差距
+
+AWS 於 10 月 8 日公布 Physical AI Toolchain，整合機器人資料、訓練、模擬與部署流程。[Amazon 公告](https://www.aboutamazon.com/news/aws/aws-physical-ai-toolchain-build-intelligent-machines)、[The Robot Report 的採訪](https://www.therobotreport.com/aws-launches-open-source-physical-ai-toolchain-for-robotics/)與[Robotics 24/7 的報導](https://www.robotics247.com/article/amazon-launches-physical-ai-toolchain-on-aws-to-help-companies-build-machines-that-think)都描述這項發布；Robotics 24/7 主要轉述供應商說法，不是獨立效能測試。
+
+工具鏈結合 SageMaker、EC2 GPU、IoT Greengrass 與 NVIDIA Isaac Sim、Isaac Lab、Isaac GR00T、Cosmos 等元件。The Robot Report 引述 AWS 說明，開發者可以單獨採用元件，也可以整合成工作流程。它不是 RoboMaker 的直接替代品，因此既有使用者仍需自行評估資料格式、模擬環境與部署介面的遷移工作。
+
+最值得注意的是[公開儲存庫 README](https://github.com/aws-samples/sample-aws-physical-ai-toolchain/blob/main/README.md)的狀態清單。查閱時 Foundation、Isaac Lab、Isaac GR00T、Isaac Sim 與 OSMO 列為 Available；Cosmos、Edge Deployment、Agentic Orchestration 與 Model Evaluation 則仍列為 Planned。公告描述完整生命週期，不代表每個階段的參考程式都已交付。README 也以 AWS sample code 定位專案，不能把它視為已經替任何機器人完成正式環境驗證的產品。
+
+為何重要：工具鏈可以減少訓練與模擬基礎設施的重複建置，但實體安全、sim-to-real 差距與部署回復仍是使用者的責任。評估時應以具體目錄、版本與狀態表為準，而不是只看「端到端」的宣傳文字。
+
+## 快速重點
+
+- [Tensorlake 0.5.144](https://www.socket.dev/blog/tensorlake-compromise)：查核 lockfile、建置紀錄與腳本執行環境；不能只搜尋目前的 package.json。
+- [Aikido 調查](https://www.aikido.dev/blog/tensorlake-npm-package-compromised)：惡意變更先進入 GitHub 儲存庫，再觸發 npm 發布；維護者身分下的 verified commit 不能證明變更安全。
+- [Gemini agent](https://techcrunch.com/2026/10/08/google-brings-agentic-ai-to-gemini-starting-with-businesses/)：產品公布獨立代理身分與操作稽核，導入前仍須確認租戶開放範圍及連接器權限。
+- [Physical AI Toolchain README](https://github.com/aws-samples/sample-aws-physical-ai-toolchain/blob/main/README.md)：數個生命週期元件仍為 Planned，不能將公告中的全部功能列入現有可交付範圍。
+- [Genkit Dart 1.0 官方發布](https://flutter.dev/blog/announcing-genkit-dart-1-0)：穩定核心提供 flows、工具中斷、middleware 與 telemetry；stateful agents 等高階能力仍置於 experimental 匯入路徑。此項以官方發布為依據，未另取得獨立實測。
+
+## 細節說明
+
+### 供應鏈查核應涵蓋安裝紀錄，不執行可疑套件
+
+Socket 與 Aikido 分析出的安裝入口是 package manifest 的 `preinstall`。這段程式在依賴安裝時啟動，而不是在業務程式呼叫 Tensorlake API 時才啟動。調查因此要區分「依賴版本存在」與「惡意腳本確實執行」兩種證據。前者可以從 lockfile、映像建置清單及快取找出，後者需要安裝日誌、程序紀錄或端點證據。兩種證據都不完整時，不能直接宣布主機未受影響。
+
+以下範例只讀取現有專案檔案，不安裝、不匯入、也不啟動 SDK。它只做初步文字比對，不是感染偵測器，也無法判斷安裝腳本是否執行。正式調查還要檢查 CI runner、歷史容器層與曾共用的快取。
+
+~~~python
+from pathlib import Path
+
+for name in ("package-lock.json", "npm-shrinkwrap.json",
+             "yarn.lock", "pnpm-lock.yaml", "bun.lock"):
+    path = Path(name)
+    if not path.is_file():
+        continue
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    for index, line in enumerate(lines):
+        if "tensorlake" not in line:
+            continue
+        nearby = "\n".join(lines[max(0, index - 2):index + 16])
+        if "0.5.144" in nearby:
+            print(f"{name}:{index + 1}: review tensorlake 0.5.144")
+~~~
+
+此範例未處理舊版二進位 `bun.lockb`，也可能因檔案格式造成漏報或相鄰版本誤判。確認受影響版本後，應進一步核對套件實際解析結果、安裝時間與 lifecycle script 政策。鎖定依賴與雜湊可以固定取得的內容，卻不能把已經被植入的版本變成安全版本。
+
+兩份研究對 C2 描述有差異。Socket 說明 Ethereum contract 解析與 GitHub fallback；Aikido 同時指出硬編碼網域與鏈上替代解析機制。本文不將兩者概括成「完全沒有固定網域」，也不把封鎖單一網域當作完整清除措施。可確認的共同結論是秘密資料可能被外送，且主機持久化需要另行處理。
+
+### 代理治理要把工具執行與模型文字分開
+
+Gemini agent 公告的產品方向，是讓代理從跨系統資料中規劃並執行工作。這使權限設計比 prompt 文案更重要。模型可能產生錯誤參數，也可能讀到外部文件中的惡意內容；寫入工具必須在執行端驗證身分、資源範圍與核准狀態。任務視窗呈現「已完成」也不等於外部系統真的已改動，成功結果應配合讀回驗證。
+
+[Genkit Dart 1.0 公告](https://flutter.dev/blog/announcing-genkit-dart-1-0)提供了一個具體例子：工具可先回傳中斷，等待應用程式取得使用者確認後再恢復。以下摘自官方範例的核心流程，省略 schema 與服務初始化，不能單獨編譯成完整應用程式。
+
+~~~dart
+final bookHotel = ai.defineTool(
+  name: 'bookHotel',
+  description: 'Books a hotel room for the user.',
+  inputSchema: HotelBooking.$schema,
+  fn: (input, ctx) async {
+    if (ctx.resumed == null) {
+      return .interrupt({
+        'hotel': input.hotelName,
+        'total': input.totalPrice,
+      });
+    }
+    final confirmation = await hotels.book(input);
+    return .response(confirmation.id);
+  },
+);
+~~~
+
+這個設計把暫停點放在工具程式，而不是要求模型自己記得不要下單。不過，`ctx.resumed` 有值不等於付款已經獲得有效授權。正式環境仍要驗證確認資料與原始訂單一致、身分有效、核准未過期，並防止重複執行。這些是本文的工程建議，不是已驗證的 Genkit 預設保證。
+
+### 機器人工作流程須依可用元件拆分驗證
+
+AWS README 的 Available／Planned 區分可以作為試驗範圍的起點。已有訓練流程的團隊可以先評估 Isaac Lab 或 GR00T 參考部署，不必先導入所有整合層。已有調度平台的團隊則要比較 OSMO 與現有工作流程的責任是否重疊。資料集、模型 checkpoint、模擬情境與邊緣裝置韌體都應保留版本，否則回饋資料很難對應到當時執行的模型。
+
+合成資料增加覆蓋率，不保證填平模擬與真實環境的差距。工具鏈公開也不等於所有 NVIDIA 元件與模型具有相同授權條款。成本評估應分開計算 GPU 訓練、模擬、儲存與資料傳輸，並另行安排硬體迴路測試。本文未部署 AWS 資源，也未重現供應商宣稱的開發時間縮短效果。
+
+## 值得追蹤的版本與提案
+
+- `tensorlake@0.5.144` 的受影響安裝範圍、維護者後續調查與歷史發布工作流程。The Register 報導的 0.5.145 更新不取代主機清理。
+- Gemini agent 的正式開放條件、區域、計費方式、代理身分管理及 MCP 連接器權限。
+- AWS Physical AI Toolchain 的 Planned 元件何時交付，以及儲存庫狀態表、授權和部署文件的更新。
+- Genkit Dart 1.0 的穩定 API；`package:genkit/experimental.dart` 下的 stateful agents 與 generative UI 應另外評估相容性。
+
+## 參考來源
+
+以下頁面均於本期查閱，未遇付費牆。媒體交叉報導不代表已獨立重現產品功能或惡意程式行為。
+
+- Socket，2026-10-08：[TensorLake npm SDK Compromised in ChainDrop Shai-Hulud Credential-Stealing Attack](https://www.socket.dev/blog/tensorlake-compromise)，原始資安研究。
+- Aikido，2026-10-08：[tensorlake NPM package compromised with Shai Hulud worm](https://www.aikido.dev/blog/tensorlake-npm-package-compromised)，另一研究團隊的分析。
+- The Register，2026-10-08：[Shai-Hulud worm makes jump to AI infrastructure with Tensorlake compromise](https://www.theregister.com/security/2026/10/08/shai-hulud-worm-makes-jump-to-ai-infrastructure-with-tensorlake-compromise/5302054)，媒體報導。
+- Google，2026-10-08：[Google Cloud launches Gemini agent](https://blog.google/innovation-and-ai/infrastructure-and-cloud/google-cloud/gemini-at-work/)，官方產品公告。
+- TechCrunch，2026-10-08：[Google brings agentic AI to Gemini, starting with businesses](https://techcrunch.com/2026/10/08/google-brings-agentic-ai-to-gemini-starting-with-businesses/)，媒體報導。
+- SiliconANGLE，2026-10-08：[Google Cloud introduces Gemini agent to change enterprise work](https://siliconangle.com/2026/10/08/google-cloud-introduces-gemini-agent-to-change-enterprise-work/)，媒體報導。
+- Amazon，2026-10-08 發布消息：[How AWS is helping companies build machines that think](https://www.aboutamazon.com/news/aws/aws-physical-ai-toolchain-build-intelligent-machines)，官方公告。
+- The Robot Report，2026-10-08：[AWS launches open-source Physical AI Toolchain for robotics](https://www.therobotreport.com/aws-launches-open-source-physical-ai-toolchain-for-robotics/)，含 AWS 主管採訪。
+- Robotics 24/7，2026-10-08：[Amazon launches Physical AI Toolchain on AWS to help companies build machines that think](https://www.robotics247.com/article/amazon-launches-physical-ai-toolchain-on-aws-to-help-companies-build-machines-that-think)，以供應商說法為主的產業報導。
+- AWS GitHub 儲存庫，2026-10-10 查閱：[AWS Physical AI Toolchain README](https://github.com/aws-samples/sample-aws-physical-ai-toolchain/blob/main/README.md)，元件交付狀態的一手文件；main 分支可能變動。
+- Flutter，2026-10-08：[Announcing Genkit Dart 1.0: Build production-ready agentic apps with Dart and Flutter](https://flutter.dev/blog/announcing-genkit-dart-1-0)，官方發布與 API 範例。
+
+## 延伸閱讀方向
+
+- npm lifecycle scripts、建置環境的最小權限與一次性 runner
+- 代理服務身分、工具核准資料與寫入後讀回驗證
+- 機器人資料版本、sim-to-real 評估與模型回復流程
+- Dart flows、human-in-the-loop 中斷與實驗性 API 相容性
