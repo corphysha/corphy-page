@@ -1,0 +1,97 @@
+---
+title: "Next.js 遠端程式碼執行修補與 Cisco 郵件閘道遭利用：2026-10-16 技術日報"
+description: "整理 10 月 14 日公布的 Next.js 上游依賴安全更新，以及 Cisco Secure Email Gateway 已遭利用的檔案寫入漏洞與應變方式。"
+date: 2026-10-16
+tags: ["daily-digest", "security", "nextjs", "cisco", "software"]
+draft: false
+---
+
+*資料截點：2026-10-16 09:00，Asia/Taipei。納入 2026-10-14 至 2026-10-16 公布的消息；與 2026-10-10 前一期頭條及重點去重。*
+
+## 重大頭條
+
+### Next.js 修補兩項重大遠端程式碼執行漏洞與一項拒絕服務問題
+
+Next.js 於 10 月 14 日發布安全更新，版本 **15.5.28** 與 **16.4.1** 修補三項上游漏洞。官方公告列出兩項 Critical 遠端程式碼執行問題，以及一項 High 拒絕服務問題；GitHub 公告與 Netlify、Pantheon 的維運說明也確認修補版本。[Next.js 官方公告](https://nextjs.org/blog/nextjs-security-update-october-14-2026)、[GitHub 安全公告](https://github.com/vercel/next.js/security/advisories/GHSA-2464-fhr4-w9xw)、[Netlify 維運說明](https://www.netlify.com/changelog/2026-10-14-nextjs-react-security-vulnerabilities/)、[Pantheon 維運說明](https://docs.pantheon.io/release-notes/2026/10/nextjs-security-release)。
+
+其中一項漏洞影響使用 App Router 與 Cache Components 的應用程式，當 use cache 函式回傳多個 typed arrays 時，未經驗證的遠端攻擊者可能觸發程式碼執行，沒有已知替代緩解措施。另一項漏洞在 glibc Linux 上透過 SVG 影像處理路徑造成風險，使用受影響的 sharp 版本時可能導致 RCE。第三項則是 App Router 的 Server Actions 遭特製請求後大量消耗 CPU，造成拒絕服務。
+
+為何重要：這不是只檢查是否使用某個單一 API 就能結案的更新。官方建議更新至修補版；只直接管理 React Server Components 套件的專案，還要依 React 公告核對相應版本。部署檢查也應涵蓋公開的 preview 與 branch deployment，否則正式環境已更新，舊預覽仍可能留在網路上。
+
+### Cisco Secure Email Gateway 漏洞已遭利用，可取得 root 命令執行
+
+Cisco 於 10 月 14 日公開 Secure Email Gateway 漏洞資訊，並表示 10 月已知悉實際利用活動。漏洞編號為 **CVE-2026-76519**，CVSS 3.1 為 **9.8**。攻擊者可透過寄送含特製附件的郵件，在符合條件的設備上寫入任意檔案並以 root 權限執行命令。[Cisco 公告](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-esa-afw-zqYJkjxp)、[BleepingComputer 報導](https://www.bleepingcomputer.com/news/security/cisco-patches-actively-exploited-secure-email-gateway-zero-day/)、[SecurityWeek 報導](https://www.securityweek.com/cisco-warns-of-exploited-secure-email-gateway-vulnerability/)均記載利用狀態與修補資訊。
+
+受影響條件包括啟用並套用 File Reputation 的 Advanced Malware Protection 郵件政策，以及 Content Scanner Tools 版本早於 **25.3.0.5525**。修補版本包括 AsyncOS **15.5.5-014** 與 **16.5.0-780**；Cisco 也提供更新的 Content Scanner Tools。廠商指出沒有可取代更新的 workaround，且成功入侵者可能移除設備上的跡證，因此不能只依賴本機掃描結果判斷是否遭入侵。
+
+為何重要：郵件閘道位於信任邊界，root 權限可能讓攻擊者讀取設備上的憑證或叢集 SSH 金鑰。先保存鑑識資料，再依設備型態執行復原；對已疑似入侵的虛擬設備，Cisco 建議部署乾淨的新 VM、重建設定並輪替憑證材料，同時檢查設備外部的網路與防火牆紀錄。
+
+## 快速重點
+
+- [Next.js 15.5.28 與 16.4.1](https://nextjs.org/blog/nextjs-security-update-october-14-2026)是本次修補版本；舊版應安排更新與重新部署。
+- [GHSA-673q-mjm6-r5xr](https://github.com/vercel/next.js/security/advisories/GHSA-673q-mjm6-r5xr)影響使用 Cache Components 且 use cache 回傳多個 typed arrays 的情境，官方未列出 workaround。
+- [GHSA-2464-fhr4-w9xw](https://github.com/vercel/next.js/security/advisories/GHSA-2464-fhr4-w9xw)關聯 CVE-2026-96889；使用者可先確認 sharp 至少為 0.35.5。
+- [Server Actions 拒絕服務公告](https://nextjs.org/blog/nextjs-security-update-october-14-2026)指出 App Router 且有至少一個 Server Action 的應用程式需更新。
+- [Netlify 的影響範圍分析](https://www.netlify.com/changelog/2026-10-14-nextjs-react-security-vulnerabilities/)指出平台代管的影像路徑與自有 Node.js function 的暴露面不同，不能把平台結論套用至其他部署架構。
+- [Pantheon 更新說明](https://docs.pantheon.io/release-notes/2026/10/nextjs-security-release)提醒直接管理 React Server Components 套件者也須核對 React 修補版。
+- [Cisco CVE-2026-76519](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-esa-afw-zqYJkjxp)的條件是 File Reputation 啟用且 Content Scanner Tools 早於 25.3.0.5525。
+- [Cisco 固定版](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-esa-afw-zqYJkjxp)為 AsyncOS 15.5.5-014 或 16.5.0-780；新版掃描工具亦包含修補。
+- Cisco 指示可用 contentscannerstatus 查版本，並以 [Cisco 公告中的 system_logs 檢查方式](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-esa-afw-zqYJkjxp)尋找入侵指標。
+- [BleepingComputer](https://www.bleepingcomputer.com/news/security/cisco-patches-actively-exploited-secure-email-gateway-zero-day/)與[SecurityWeek](https://www.securityweek.com/cisco-warns-of-exploited-secure-email-gateway-vulnerability/)皆指出攻擊者可能清除設備跡證；應交叉檢查外部網路與防火牆記錄。
+
+## 細節說明
+
+### Next.js 更新不只看直接依賴
+
+Next.js 官方公告將三個問題分別列為 Cache Components 中 typed arrays 的 RCE、SVG 影像最佳化路徑的 RCE，以及 Server Actions 的拒絕服務。第一項有特定函式回傳形狀條件，但官方沒有提供 workaround，因此不應只靠搜尋程式碼是否有明顯相同回傳值而延後升級。SVG 問題與上游影像處理依賴有關，官方列出的暫時措施是確保 sharp 至少為 0.35.5。Server Actions 問題則與 App Router 使用方式相關，Pages Router 或未使用 Server Actions 的部署不在公告所述的同一條件內。版本修補涵蓋 15.5.28 與 16.4.1，更新後應重新建置，並確認產物確實使用新的 lockfile 解析結果。
+
+~~~bash
+# 依目前主版本選擇對應修補版
+npm install next@15.5.28
+# 或
+npm install next@16.4.1
+
+# 確認實際解析版本與 sharp 版本
+npm ls next sharp
+~~~
+
+這只示範更新與檢查，不代表所有專案都可不經測試直接升級。部署者應跑應用程式測試、產生新建置，再清理仍可公開存取的舊 preview。若直接固定 react-server-dom-* 等套件，而非完全由 Next.js 管理，還需依 React 相關公告核對版本；Pantheon 列出的修補版本為 19.0.9、19.1.10、19.2.9 或 19.3.1，實際選擇須配合使用中的分支。
+
+### Cisco 漏洞的排查要包含設備外部紀錄
+
+Cisco 公告將漏洞條件限定在 Secure Email Gateway 的 File Reputation 設定與掃描工具版本。管理者可在 CLI 使用 contentscannerstatus，並在 Web 管理介面確認 Incoming 或 Outgoing Mail Policy 的 Enable File Reputation 選項。公告提供的本機初步檢查命令如下：
+
+~~~text
+cisco-esa> contentscannerstatus
+esa-appliance> grep "System Security" system_logs
+~~~
+
+找到「Suspected compromise indicator」時，Cisco 建議聯絡 TAC；「No compromise indicator」並不能排除攻擊者已清除本機紀錄。若設備屬叢集，應逐台檢查，因設備間 SSH 私鑰也可能受到影響。Cisco 建議在設備外部檢查網路與防火牆紀錄，尋找異常上傳或連往可疑 IP 的流量。若虛擬設備疑似遭入侵，先保全鑑識資料，再重建乾淨 VM 和設定，之後輪替設備上的帳密及加密材料。固定版或 Content Scanner Tools 25.3.0.5525 以上可修補漏洞，但更新本身不能證明先前沒有入侵。
+
+## 值得追蹤的版本與公告
+
+- Next.js 15.5.28、16.4.1 在不同 Node.js、Linux 發行版與影像處理流程中的回歸狀況。
+- React Server Components 相關套件修補版與各框架的安全公告。
+- 公開 preview、branch deployment 的清除與重新部署完成狀態。
+- Cisco Content Scanner Tools 25.3.0.5525 以上版本在實際設備的更新狀態。
+- CVE-2026-76519 受影響設備的外部網路記錄與後續事件通報。
+
+## 參考來源
+
+以下來源於 2026-10-16 查閱，頁面未標示付費牆。官方公告是版本與受影響條件的一手依據；平台商文件只描述其自身託管環境。
+
+- Next.js，2026-10-14：[Next.js Security Update for Upstream Vulnerabilities](https://nextjs.org/blog/nextjs-security-update-october-14-2026)，官方公告。
+- GitHub，2026-10-14：[Unauthenticated Remote Code Execution in Image Optimization API when SVG files are used](https://github.com/vercel/next.js/security/advisories/GHSA-2464-fhr4-w9xw)，GHSA-2464-fhr4-w9xw。
+- GitHub，2026-10-14：[Unauthenticated Remote Code Execution in use cache functions returning typed arrays](https://github.com/vercel/next.js/security/advisories/GHSA-673q-mjm6-r5xr)，GHSA-673q-mjm6-r5xr。
+- Netlify，2026-10-14：[Next.js & React security release (Oct 2026): what to know](https://www.netlify.com/changelog/2026-10-14-nextjs-react-security-vulnerabilities/)，託管環境影響說明。
+- Pantheon，2026-10-14：[Next.js Security Release now available](https://docs.pantheon.io/release-notes/2026/10/nextjs-security-release)，維運說明。
+- Cisco，2026-10-14：[Cisco Secure Email Gateway Arbitrary File Write Vulnerability](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-esa-afw-zqYJkjxp)，官方安全公告。
+- BleepingComputer，2026-10-14：[Cisco patches new Secure Email Gateway zero-day exploited in attacks](https://www.bleepingcomputer.com/news/security/cisco-patches-actively-exploited-secure-email-gateway-zero-day/)，資安媒體報導。
+- SecurityWeek，2026-10-15：[Cisco Warns of Exploited Secure Email Gateway Vulnerability](https://www.securityweek.com/cisco-warns-of-exploited-secure-email-gateway-vulnerability/)，資安媒體報導。
+
+## 延伸閱讀方向
+
+- Next.js App Router 與 Cache Components 的威脅模型
+- React Server Components 依賴盤點與 lockfile 更新流程
+- 公開預覽部署的生命週期與撤除策略
+- 郵件閘道設備的外部日誌留存與事件復原
