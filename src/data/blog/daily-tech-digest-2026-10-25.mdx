@@ -1,0 +1,164 @@
+---
+title: "GitLab 緊急修補、Claude Code 沙箱加固與 DuckDB 2.0：2026-10-25 技術日報"
+description: "整理 GitLab 正規表示式編譯器 RCE、Claude Code 2.1.309 的權限修正，以及 DuckDB 2.0 LTS 的遠端查詢、擴充套件與遷移限制。"
+date: 2026-10-25
+tags: ["daily-digest", "security", "gitlab", "claude-code", "duckdb", "database"]
+draft: false
+---
+
+## 涵蓋範圍與方法
+
+資料截點為 2026-10-25 09:00，Asia/Taipei，納入此前 96 小時內發布的版本與公告。DuckDB 以 GitHub Release 的 2026-10-21 12:49 UTC 時間判定，避免把只標示日期的文章一律當作當日零時。GitLab 以 10 月 22 日 CERT-EU 公告交叉核對前一日發布的修補版本。前一期已涵蓋的 PHP 緊急更新、GitHub Package Firewall 與 TorchNeuron 不再列入頭條或快速重點。
+
+本期聚焦三項具備官方原始資料及其他獨立發布者佐證的事件。第三方文章多依官方公告整理，交叉驗證能確認發布內容，不能取代獨立漏洞重現或效能測試。未經重現的效能數字均註明來源，不把社群留言當成通用 benchmark。
+
+## 重大頭條
+
+### GitLab 修補正規表示式編譯器 RCE，CERT-EU 建議優先處理對外服務
+
+GitLab 的 CVE-2026-110264 涉及正規表示式編譯時的整數溢位，在特定條件下可讓未登入使用者在伺服器執行任意程式碼。官方給出的 CVSS 3.1 分數為 10.0，修補版本包括 19.5.1、19.4.3、19.3.6、19.2.9、19.1.9、19.0.10 與 18.11.13。影響範圍最早追溯至 7.0，不能以「仍在使用舊版」推斷自己不受影響。[GitLab 修補公告](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/)、[CERT-EU 公告](https://cert.europa.eu/publications/security-advisories/2026-019/)與 [Oktsec 事件整理](https://www.oktsec.com/research/security-recap-october-22-23-2026)確認了漏洞機制、修補分支與處理優先順序。
+
+為何重要：GitLab 同時保管原始碼、CI 設定與可取得其他系統權限的憑證。修補伺服器只能阻止同一漏洞再次觸發，不能證明先前未遭入侵。CERT-EU 明確建議優先更新網際網路可達的資產，並評估是否已遭入侵。官方另提供 Onigmo native worker crash 與 Org mode render error burst 兩種偵測規則，作為自架環境調查的起點。
+
+GitLab.com 已修補，GitLab Dedicated 的指定內部版本也已包含修正。自架部署則需要依實際執行的版本安排更新。這次修補包含資料庫遷移，官方特別列出 19.3.6 與 19.4.3 的一般遷移，以及 19.4.3 的部署後遷移，不能把所有分支都當成無停機替換。
+
+### Claude Code 2.1.309 修正 shell 啟動檔、MCP 設定與背景程序的隔離缺口
+
+Claude Code 2.1.309 於 10 月 22 日 22:18 UTC 發布，也就是台北時間 10 月 23 日清晨。官方列出的修正包括 macOS 與 Linux 的 shell 啟動檔在沙箱外執行、macOS 符號連結路徑未套用部分 `denyWrite` 規則，以及沙箱命令和自動接受的編輯能修改 `--mcp-config` 指定檔案等問題。[官方 Release](https://github.com/anthropics/claude-code/releases/tag/v2.1.309)、[Talayo Labs 技術檢查](https://sessionboxer.talayolabs.com/blog/claude-code-2-1-309-sandbox-fixes/)與 [Claude Hub 分析](https://www.claudehub.fr/en/blog/claude-code-2-1-309-sandbox-permissions-hardened/)均描述了這些變更。
+
+為何重要：真正的隔離範圍必須涵蓋命令開始前、命令執行中及工作階段結束後。只檢查工具畫面上的那一行 Bash，可能漏掉 shell 啟動檔或仍在執行的背景程序。MCP 設定檔也不是普通的專案資料，它可能決定之後啟動哪個本機程式，因此需要獨立保護。
+
+這次也修正 Windows PowerShell hook 在特定條件下未阻擋操作，以及分割窗格中的 agent teammate 未繼承 leader 命令列工具限制等問題。公開發布說明沒有提供這批問題的完整利用條件或遭利用證據，不能據此宣稱已發生大規模攻擊。對無人值守工作，應檢查整個 agent 執行環境的權限，而非把 Bash 沙箱視為所有工具的共同邊界。
+
+### DuckDB 2.0 LTS 擴充遠端查詢與套件發布方式，檔案相容性仍是升級關卡
+
+DuckDB 2.0.0 已發布，官方將其列為至少支援至 2027 年 10 月的 LTS。這一版完善 Quack 遠端協定，新增 `CONNECT`，整合 `VARIANT`、非同步 I/O、triggers 與可擴充 SQL parser。它仍能嵌入應用程式執行，並未要求所有使用者改成 client-server。[官方技術說明](https://duckdb.org/2026/10/21/announcing-duckdb-200.html)、[Tech AI Wire 週報](https://techaiwire.com/articles/tools-this-week-october-23-2026-duckdb-2-0-torchtpu/)及 [Query Farm 的 2.0 擴充套件公告](https://query.farm/blog/duckdb-2-query-farm-repository/)分別確認版本功能、發布資訊與第三方套件實際導入情況。
+
+為何重要：遠端分析和擴充套件發布都開始有更明確的介面，但升級不能只改套件版本。2.0 新建的資料庫檔案無法讓舊版 DuckDB 讀取；既有檔案則仍可由 2.0 讀寫，官方表示這些檔案保持舊版可讀。混用多個 DuckDB 程序、Python 套件與第三方擴充套件的環境，必須先盤點版本及資料檔來源。
+
+官方的 Agent Mode 實驗指出，TPC-H 情境下模型需要讀取的 CLI 輸出減少 59%。這是輸出量，不是查詢時間或總代理成本降低 59%。[DuckLabs 的發布說明](https://ducklabs.com/press/duckdb-20/)更註明，該測試的整體 agent 成本與執行時間未明顯下降。效能指標的分母不能省略。
+
+## 快速重點
+
+- [GitLab CVE-2026-110264](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/)是未登入使用者可在特定條件下觸發的 RCE，不能用停用一般使用者註冊取代修補。
+- [CERT-EU](https://cert.europa.eu/publications/security-advisories/2026-019/)建議先處理對外服務，並同時進行入侵評估。
+- [GitLab 修補公告](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/)列出的固定版本跨越七條分支，升級須對照所屬分支及遷移程序。
+- [Claude Code 2.1.309](https://github.com/anthropics/claude-code/releases/tag/v2.1.309)修正 Linux 背景命令存活時間超過 session 後，寫入禁止規則失效的問題。
+- [同一版 Claude Code](https://github.com/anthropics/claude-code/releases/tag/v2.1.309)也修正停用的 MCP server 在 print 與 SDK session 中因後續權限提示重新連線的問題。
+- [Claude Code 行為變更](https://github.com/anthropics/claude-code/releases/tag/v2.1.309)將 `sed -i` 改成實際 Bash 命令，不再提供原先模擬檔案編輯的回復行為。
+- [DuckDB 2.0](https://duckdb.org/2026/10/21/announcing-duckdb-200.html)將非同步 I/O 用於 Parquet、CSV 與原生儲存格式，讓 I/O 並行度與查詢處理分開擴展。
+- [DuckDB lambda 遷移](https://duckdb.org/2026/10/21/announcing-duckdb-200.html)改用 `lambda x: ...`，單箭頭語法預設停用，預計在 2.1 移除。
+- [DuckDB 擴充套件 API](https://duckdb.org/2026/10/21/announcing-duckdb-200.html)推出 C API v2，但官方仍希望先經實際使用驗證再標示穩定。
+- [Query Farm](https://query.farm/blog/duckdb-2-query-farm-repository/)開始自行簽署與發布 DuckDB 2.0 擴充套件；舊版仍走 community repository，安裝來源需按主版本區分。
+
+## 細節說明
+
+### GitLab 的修補與調查是兩條工作線
+
+漏洞位於正規表示式編譯器，不是專案自行寫出的某個 CI script。官方向正常維護範圍以外的部分分支回補修正，反映舊部署也需要處理。更新前應保存既有紀錄、確認備份與回復程序，並核對所需的版本升級路徑。更新後應確認正在服務請求的程序確實載入固定版本，不能只查映像倉庫裡是否已有新標籤。若偵測規則找到可疑 Onigmo crash 或 Org mode render error，仍須比對請求、時間與程序紀錄。單一錯誤不等於已遭利用，沒有命中也不能證明完全安全。
+
+官方公告還包含 OmniAuth SAML 與 LDAP 自動連結的驗證問題，以及 OAuth/OIDC discovery document 的快取污染問題。因此，這次更新的價值不只有一項 CVSS 10.0 漏洞。實際影響與啟用功能有關，應分別核對身分整合與快取部署。上述判斷依據均見 [GitLab 原始公告](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/)，並未推定所有安裝都有相同可利用路徑。
+
+### Claude Code 的安全規則需要跨工具一致
+
+同一個檔案可能由 Edit 工具、Bash redirect 或 MCP server 接觸。若限制只存在其中一種工具，換條寫入路徑就可能改變結果。2.1.309 修正了包含 subshell 的部分命令未遵守 `Edit(path)` deny rule 的情況，也處理符號連結指向真實路徑時的規則套用。這說明測試案例需要包含不同工具與不同路徑表示法，不能只測試正規化後的一個檔名。Windows hook 則須確認失敗時確實阻擋，不能只看程式有沒有被呼叫。以下是根據 [官方發布說明](https://github.com/anthropics/claude-code/releases/tag/v2.1.309)整理的驗收矩陣，不是公開漏洞利用程式：
+
+```text
+測試面向                 驗收條件
+一般路徑與 symlink       都必須遵守相同的寫入禁止規則
+Edit 與 Bash redirect    都不能繞過指定檔案的 deny rule
+--mcp-config 指定檔案    不可由沙箱命令或自動編輯改寫
+Linux 背景程序           session 結束後仍保留寫入限制
+PowerShell policy hook  拒絕操作的退出狀態確實阻擋後續動作
+agent teammate          繼承 leader 指定的工具限制
+```
+
+另一項需要調整的工作流程是回復。官方明確表示 `sed -i` 現在像其他 Bash 編輯一樣，不由 `/rewind` 還原。這裡不應再把「有 checkpoint」寫成「所有 shell 修改都能回復」。在自動化修改前保留 Git 差異、備份非追蹤檔案，以及在拋棄式工作目錄測試，都是獨立於 agent 介面的保障。
+
+### DuckDB 的遠端查詢與半結構資料
+
+Quack 將查詢送到提供資料的 DuckDB 程序，客戶端接收結果。官方示範以 `ATTACH` 指定遠端資料庫，再以 `CONNECT` 切換。下例沿用官方的 localhost 與示範 token，不適合直接暴露到網際網路：
+
+```sql
+-- 伺服器 session，示範 token 必須在實際部署時替換。
+CALL quack_serve(token = 'my_token');
+CREATE TABLE events (event_date DATE, name VARCHAR);
+INSERT INTO events VALUES ('2026-10-25', 'release-review');
+
+-- 另一個客戶端 session。
+ATTACH 'quack:localhost' AS qk (TOKEN 'my_token');
+CONNECT qk;
+SELECT event_date, name FROM events;
+```
+
+依 [官方部署說明](https://duckdb.org/2026/10/21/announcing-duckdb-200.html)，服務預設只聽 localhost。跨機器連線建議透過終止 TLS 的反向代理，直接對外開放的 `allow_other_hostname` 僅供測試。多一個可連線的服務，就多了憑證、驗證、網路限制與版本相容性要管理。保留內嵌模式的理由沒有消失。
+
+`VARIANT` 則處理每列結構可能不同的資料。2.0 的重點是從儲存、執行到 Parquet 的整合，而非把 JSON 字串換一個名稱。以下縮寫自 [官方範例](https://duckdb.org/2026/10/21/announcing-duckdb-200.html)，展示不同形狀資料及型別檢查：
+
+```sql
+CREATE TABLE event_payloads (payload VARIANT);
+INSERT INTO event_payloads VALUES
+    ('{"user": {"id": 42, "tags": ["a", "b"]}}'::JSON::VARIANT),
+    ('{"event": "click", "x": 10, "y": 20}'::JSON::VARIANT);
+
+SELECT variant_type(payload), variant_keys(payload)
+FROM event_payloads;
+
+-- 2.0 建議的 lambda 語法。
+SELECT list_transform([1, 2, 3], lambda x: x + 1);
+```
+
+這些範例是 API 與 SQL 用法說明，並非本期自行重現的效能測試。分析服務升級還要測試實際檔案格式、第三方 extension、查詢計畫及記憶體峰值，不能把成功執行一段範例當作完整驗收。
+
+### 自管 extension repository 改變了誰負責發布與信任
+
+Query Farm 在 10 月 22 日公布自己的 DuckDB 2.0 repository。過去發布流程需要向 community-extensions 提交變更，現在可以自行建置、測試、簽署與發布。速度與責任一起移轉，套件作者也必須維護分發服務與簽章金鑰。DuckDB 的 repository 建立流程會取得並釘選公鑰，並顯示 SHA-256 指紋，讓管理者與其他管道提供的指紋比對。這不代表任意 repository 都值得信任，也不應把遠端網址當成身分證明。以下依 [Query Farm 公告](https://query.farm/blog/duckdb-2-query-farm-repository/)呈現完整安裝方式，僅適用於已決定信任該發布者的 DuckDB 2.0 環境：
+
+```sql
+SET allow_extension_repositories = 'allowed';
+
+CREATE EXTENSION REPOSITORY IF NOT EXISTS query_farm
+    WITH PREFIX 'https://duckdb-extensions.query.farm';
+
+INSTALL a5 FROM query_farm;
+LOAD a5 FROM query_farm;
+```
+
+Query Farm 說明，community repository 裡的 stub 不會擅自新增 repository 或下載替代程式碼。這個限制保留了使用者明確選擇新信任來源的步驟。它比無提示切換下載網址更容易稽核。
+
+## 值得追蹤的版本、RFC 與提案
+
+- [GitLab 固定版本與遷移](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/)：19.5.1、19.4.3、19.3.6 及公告列出的較舊分支回補版。追蹤重點是實際部署完成及入侵調查，不是只有下載套件。
+- [Claude Code 2.1.309](https://github.com/anthropics/claude-code/releases/tag/v2.1.309)：追蹤符號連結、背景程序及 Windows hook 的回歸測試，並重新核對 `/rewind` 的涵蓋範圍。
+- [DuckDB 2.0 遷移](https://duckdb.org/2026/10/21/announcing-duckdb-200.html)：追蹤第一個修補版、C API v2 的穩定狀態與 extension repository 語法。官方指出後者仍可能變動。
+- [DuckDB 發布時程](https://duckdb.org/release_calendar)：1.4 支援至 2026-11-17，1.5 延長至 2027 年 3 月。2.0.1 目前規劃於 2026-11-18，規劃日期並非發布保證。
+- [DuckDB 2.1 相容性](https://duckdb.org/2026/10/21/announcing-duckdb-200.html)：單箭頭 lambda 與其相容旗標預計移除，macOS x86_64 也預計停止支援。仍有 Intel Mac 或舊 SQL 語法的環境需提早安排。
+
+## 參考來源表
+
+以下頁面於 2026-10-25 查閱，讀取時均未遇到付費牆。DuckDB 與 DuckLabs 屬同一開發組織，不重複計為獨立佐證。第三方分析與社群討論不等於獨立安全稽核。
+
+| 日期 | 原文標題與連結 | 用途與限制 |
+| --- | --- | --- |
+| 2026-10-21 | [GitLab Critical Patch Release: 19.5.1, 19.4.3, 19.3.6, 19.2.9, 19.1.9, 19.0.10, 18.11.13](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/) | 官方版本、漏洞條件與遷移說明 |
+| 2026-10-22 | [Critical Vulnerability in GitLab Community and Enterprise Editions](https://cert.europa.eu/publications/security-advisories/2026-019/) | CERT-EU 的獨立處理建議，技術資料引用 GitLab |
+| 2026-10-23 | [Security recap, October 22–23: critical patches, exposed secrets and AI attacks](https://www.oktsec.com/research/security-recap-october-22-23-2026) | Oktsec 的交叉整理，非本期自行調查 |
+| 2026-10-22 UTC | [v2.1.309](https://github.com/anthropics/claude-code/releases/tag/v2.1.309) | Claude Code 官方修正與行為變更 |
+| 2026-10-23 | [Claude Code 2.1.309 stops your shell startup files from running outside the sandbox](https://sessionboxer.talayolabs.com/blog/claude-code-2-1-309-sandbox-fixes/) | Talayo Labs 分析，作者另有容器產品 |
+| 2026-10-23 | [Claude Code 2.1.309: Sandbox and Permissions Get Locked Down](https://www.claudehub.fr/en/blog/claude-code-2-1-309-sandbox-permissions-hardened/) | Claude Hub 的工作流程分析 |
+| 2026-10-21 | [Announcing DuckDB 2.0.0 LTS “Cinnamon Teal”](https://duckdb.org/2026/10/21/announcing-duckdb-200.html) | 官方 SQL、相容性與效能聲明 |
+| 2026-10-21 12:49 UTC | [DuckDB v2.0.0](https://github.com/duckdb/duckdb/releases/tag/v2.0.0) | 用以確認版本實際發布時間 |
+| 2026-10-21 | [DuckDB 2.0 Gives Developers More Ways to Connect, Query and Build](https://ducklabs.com/press/duckdb-20/) | 同組織補充 Agent Mode 測試限制 |
+| 2026-10-22 | [DuckDB 2.0 and the Query Farm extension repository](https://query.farm/blog/duckdb-2-query-farm-repository/) | 獨立擴充套件作者的實際導入公告 |
+| 2026-10-23 | [Tools This Week: October 23, 2026 - DuckDB 2.0, TorchTPU](https://techaiwire.com/articles/tools-this-week-october-23-2026-duckdb-2-0-torchtpu/) | 第三方版本整理，本文只採用時間窗內的 DuckDB 資訊 |
+| 2026-10-21 起 | [DuckDB 2.0.0 LTS “Cinnamon Teal”](https://news.ycombinator.com/item?id=50181136) | Hacker News 社群觀察，未採用留言中的效能數字 |
+| 查閱於 2026-10-25 | [Release Calendar](https://duckdb.org/release_calendar) | 支援期限與暫定發布日期，非新增新聞事件 |
+
+## 延伸閱讀方向
+
+- 正規表示式編譯器的整數溢位與服務端輸入處理
+- 沙箱啟動、背景程序存活與跨工具檔案權限的一致性
+- MCP 本機程序與設定檔的信任邊界
+- 分析型資料庫的遠端查詢、檔案格式相容性與回復策略
+- 擴充套件 repository 的簽章金鑰釘選與發布責任
+- Agent CLI 輸出量、總成本及端到端延遲的分別量測
