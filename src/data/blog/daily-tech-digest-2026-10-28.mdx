@@ -1,0 +1,161 @@
+---
+title: "Tailscale SSH 權限風險與 Ghostty 1.4：2026-10-28 技術日報"
+description: "解析 Tailscale SSH 調查中的權限提升風險、暫時緩解措施，以及 Ghostty 1.4 的終端機安全修補、scrollback 壓縮與 Linux 繪圖管線變更。"
+date: 2026-10-28
+tags: ["daily-digest", "security", "tailscale", "ghostty", "terminal"]
+draft: false
+---
+
+## 涵蓋範圍與方法
+
+資料截點為 2026-10-28 09:00，Asia/Taipei，採用此前 96 小時內的新公告與版本。前一期已報導的 GitLab 緊急修補、Claude Code 2.1.309 與 DuckDB 2.0 不重複列入。本期縮為兩個主題，分別核對官方原始說明與兩個不同發布者的報導或分析。
+
+交叉來源不等於獨立重現。Tailscale 的漏洞範圍仍在調查，媒體對研究報告的整理不能直接當成官方已確認的完整影響清單。Ghostty 的效能數字來自官方測試，第三方的 zlib 實驗只用於說明壓縮率與資料內容的關係，不是 Ghostty 實測。
+
+## 重大頭條
+
+### Tailscale 確認 SSH 權限提升風險，先收緊政策與不必要的 forwarding
+
+Tailscale 在 10 月 26 日的[調查更新](https://tailscale.com/ssh-investigation-update)確認，已獲准使用 Tailscale SSH 的連線者，在某些條件下可能執行超出指定本機帳號權限的操作，甚至取得更高權限。[SecurityWeek](https://www.securityweek.com/tailscale-rushes-patches-after-uncoordinated-disclosure-of-tailworm-flaws/)與 [BleepingComputer](https://www.bleepingcomputer.com/news/security/tailscale-warns-of-serious-ssh-flaws-allowing-root-privilege-escalation/)於 10 月 27 日交叉報導了這項風險與修補進度。
+
+為何重要：網路身分驗證成功，不代表後續 Unix 權限處理也正確。風險出現在已授權連線之後，不能寫成「任何未登入攻擊者都能連進任意 tailnet 主機」。但若一台裝置遭入侵，過寬的 SSH 政策可能擴大它能接觸的伺服器範圍。
+
+官方當時表示，多數已辨識問題的修正已實作，仍在測試，目標為 10 月 27 日結束前發布修補客戶端。這是預定時程，不是發布完成證明。本期取得的調查頁尚未列出這批問題對應的固定版本，因此不猜測版本號。官方也沒有建議所有使用者一律停用 Tailscale SSH，而是要求檢查授權、限制敏感主機存取，並在不需要時停用 SSH forwarding。
+
+### Ghostty 1.4 發布，安全修補與記憶體改善應一起評估
+
+[Ghostty 1.4.0](https://ghostty.org/docs/install/release-notes/1-4-0)於 10 月 27 日發布，包含 scrollback 壓縮、Kitty graphics 動畫與相對位置支援，以及 Linux、FreeBSD 的新 EGL 繪圖管線。[Linuxiac](https://linuxiac.com/ghostty-1-4-terminal-emulator-cuts-memory-usage-boosts-performance/)確認版本與平台需求變更；[Frank Chu 的分析](https://dev.to/frankchu/ghostty-14-says-scrollback-compression-saves-70-90-i-measured-five-kinds-of-text-2l06)則檢查不同文字內容在分頁壓縮下的差異，並明確說明沒有執行 Ghostty GUI benchmark。
+
+為何重要：終端機會解讀遠端程序與本機工具輸出的控制序列，並非單純顯示文字。1.4 的安全清單包含惡意 Kitty graphics 輸出、tmux control mode、貼上保護、超連結與 shell integration 的修正。其中部分問題只要顯示惡意輸出就可能觸發，另一些需要貼上、點擊或開啟特製檔案，應依條件分開評估。
+
+效能方面，官方稱典型文字型歷史紀錄的不可見 scrollback 頁面可減少 70% 至 90% 的實體記憶體使用量，預設歷史上限也由 10 MB 提高至 50 MB。這不是整個 Ghostty 程序的記憶體一律降低 90%，更不是每種輸出都有相同壓縮率。Linux 原生套件另提高至 GTK 4.18 與 libadwaita 1.7，發行版相依套件是否足夠是升級前的實際關卡。
+
+## 快速重點
+
+- [Tailscale 官方](https://tailscale.com/ssh-investigation-update)將多數已辨識 SSH 問題歸類為權限提升，利用條件仍與帳號、裝置權限及系統設定有關。
+- [暫時緩解措施](https://tailscale.com/ssh-investigation-update)是在 `tailscaled` 服務環境設定 `TS_SSH_DISABLE_FORWARDING=1` 並重新啟動服務，不是只在互動式 shell 設定變數。
+- [SecurityWeek](https://www.securityweek.com/tailscale-rushes-patches-after-uncoordinated-disclosure-of-tailworm-flaws/)指出，研究者描述的橫向移動依賴政策原本允許的 SSH 存取，不代表能任意跨越所有網路限制。
+- [官方修補時程](https://tailscale.com/ssh-investigation-update)受測試結果約束，正式 advisory 才會列出確認的漏洞、版本與設定範圍。
+- [Ghostty 1.4 安全清單](https://ghostty.org/docs/install/release-notes/1-4-0)修正 carriage return 未被當作換行處理的貼上保護問題，影響不使用 bracketed paste 的程式。
+- [Ghostty Kitty graphics 修正](https://ghostty.org/docs/install/release-notes/1-4-0)涵蓋當機、卡住、大量配置記憶體，以及有限條件下對允許暫存目錄外檔案的讀取或刪除。
+- [Ghostty scrollback 壓縮](https://ghostty.org/docs/install/release-notes/1-4-0)目前適用於 macOS 與 64 位元 Linux，應觀察 resident memory，不是虛擬位址空間。
+- [Linux 新繪圖管線](https://linuxiac.com/ghostty-1-4-terminal-emulator-cuts-memory-usage-boosts-performance/)由專用執行緒透過 EGL 繪圖，再以 DMABUF 交給 GTK；無法匯出 DMABUF 的驅動會走 CPU 複製。
+- [Ghostty 1.4 的 SSH wrapper](https://ghostty.org/docs/features/ssh)可安裝遠端 terminfo，失敗時退回 `xterm-256color`，不應假設每台遠端主機都已有 `xterm-ghostty`。
+- [GTK 相依需求](https://ghostty.org/docs/install/release-notes/1-4-0)超過 Ubuntu 24.04 LTS 標準函式庫版本；官方列出的替代方式包括 Flatpak，而非直接假設原生套件能安裝。
+
+## 細節說明
+
+### Tailscale SSH 的問題在授權之後，緩解也必須落在服務層
+
+Tailscale SSH 與一般 OpenSSH 服務不是同一個程序，不能只修改 `sshd_config` 就認為完成官方緩解。官方指定的是 `tailscaled` 的服務環境。若服務由 systemd 管理，可在既有維運程序下加入下列 drop-in。範例只呈現官方指定變數如何交給服務，並未在本期執行環境套用。重新啟動可能影響連線，應先保留替代管理通道。
+
+```ini
+# /etc/systemd/system/tailscaled.service.d/disable-ssh-forwarding.conf
+[Service]
+Environment="TS_SSH_DISABLE_FORWARDING=1"
+```
+
+```bash
+# 由管理者在確認服務名稱與維護時段後執行。
+sudo systemctl daemon-reload
+sudo systemctl restart tailscaled.service
+
+# 檢查服務是否啟動，以及 systemd 載入的環境。
+systemctl is-active tailscaled.service
+systemctl show tailscaled.service --property=Environment
+```
+
+服務狀態與環境檢查仍不是完整的功能驗收，還需從獲准的測試客戶端確認不必要的 forwarding 確實被拒絕。這個變數只緩解部分較嚴重問題，不能取代後續安全更新。若仍需要 forwarding，則應先縮小可連線的裝置、使用者與目的主機集合，避免在等待修補期間保留過寬授權。
+
+[研究報導](https://www.bleepingcomputer.com/news/security/tailscale-warns-of-serious-ssh-flaws-allowing-root-privilege-escalation/)還涵蓋 app connectors、DERP、Serve 與 headscale，但它們有不同前置條件，不能合併成一個通用攻擊路徑。研究使用的 Tailscale 1.104.2 與 headscale 0.29.5 也不等於官方已確認的完整受影響版本範圍。SecurityWeek 指出，其報導時官方與研究報告都未提及已在真實環境遭利用。這只能表示當時沒有公開這類證據，不能推導出沒有入侵。
+
+### Ghostty 的兩個效能分母不能混用
+
+官方在 macOS M4 Max 的純文字與 Unicode 情境下，量到端到端 I/O 吞吐量提高 25% 至 55%。其中一項改動是將讀取 pty 與解析輸出拆到不同執行緒，避免寫入端等待解析完成。另一方面，ASCII parser benchmark 從 128 MB/s 提高至 725 MB/s。這是解析器測試，不是所有 shell 工作都會快同樣倍數。官方另以真實 asciinema 紀錄量到約 25% 的處理改善，顯示測試資料與瓶頸會改變結果。
+
+概念上，兩種處理方式可寫成以下資料流。這不是 Ghostty 原始碼，而是依[官方說明](https://ghostty.org/docs/install/release-notes/1-4-0)整理的執行模型，省略鎖定、緩衝區及背壓細節。
+
+```text
+原先
+pty -> 讀取 -> 解析 -> 下一次讀取
+                |
+                +-> 解析期間可能延後繼續排空 pty
+
+1.4 的改動方向
+pty -> 讀取執行緒 -> 緩衝資料 -> 解析執行緒
+```
+
+scrollback 壓縮則處理另一種資源。官方表示壓縮在終端機閒置時進行，捲動或搜尋時按需求解壓縮。它降低不可見歷史頁面的實體記憶體，而不是刪除歷史，也不保證降低同等幅度的整體程序用量。開很多分頁、輸出大量重複日誌與主要閱讀散文，是不同工作負載。比較升級前後時應固定輸入、視窗尺寸、分頁數與歷史上限，否則預設上限的改變本身就會影響結果。
+
+### 分頁壓縮的對照實驗可以解釋限制，但不能替代 Ghostty 實測
+
+Frank Chu 用 Python zlib 比較整份資料與 16 KiB、4 KiB 分頁壓縮，發現重複日誌與多樣化散文的結果不同。作者清楚註明，Ghostty 的內部資料是帶樣式的終端機 cell，壓縮器也不是該實驗使用的 zlib。因此不能拿實驗的百分比直接判定 Ghostty 的官方數字正確或錯誤。可採用的結論較窄：資料可重複性與分頁大小會影響壓縮率。以下是依同一方法整理的可重現範例，會讀取指定的本機文字檔，但不寫回或執行其內容。
+
+```python
+from pathlib import Path
+import sys
+import zlib
+
+
+def compressed_size(data: bytes, page_size: int) -> int:
+    return sum(
+        len(zlib.compress(data[start:start + page_size], level=6))
+        for start in range(0, len(data), page_size)
+    )
+
+
+data = Path(sys.argv[1]).read_bytes()
+if not data:
+    raise SystemExit("Input must not be empty")
+
+for page_size in (4096, 16384):
+    size = compressed_size(data, page_size)
+    saving = 100 * (1 - size / len(data))
+    print(f"page={page_size} compressed={size} saving={saving:.2f}%")
+```
+
+這段程式量到的是輸入位元組經 zlib 壓縮後的大小，不含 Ghostty 的 cell 配置、索引、GPU 資源與解壓縮成本。測試時應分別使用真實日誌、原始碼與一般文字，而非只拿高度重複的合成資料代表全部情境。範例不提供預設 benchmark 數字，避免將未測環境的輸出寫成測量結果。
+
+### SSH wrapper 補齊 terminfo，不代表更改遠端授權
+
+Ghostty 新的 `+ssh` 會準備遠端終端機環境，再執行真正的 SSH client。官方文件說明，它會嘗試透過遠端 `tic` 安裝 terminfo，安裝成功後使用 `xterm-ghostty`；若失敗則警告並退回 `xterm-256color`。它還能請求轉送 `COLORTERM`、`TERM_PROGRAM` 與 `TERM_PROGRAM_VERSION`。這些環境變數仍須遠端 `sshd` 的 `AcceptEnv` 允許，並非客戶端要求後就一定生效。以下示範直接呼叫方式，以及不希望自動安裝遠端 terminfo 時的旗標。
+
+```bash
+ghostty +ssh -- user@example.com
+
+# 關閉遠端 terminfo 安裝與相關環境變數轉送。
+ghostty +ssh --terminfo=false --forward-env=false -- user@example.com
+```
+
+[SSH 文件](https://ghostty.org/docs/features/ssh)另指出，互動式 shell 的 wrapper function 不會自動套用到 `git`、`rsync`、`scp` 或排程中另外啟動的 SSH 程序。診斷時要確認實際呼叫的是 wrapper 還是 SSH binary。這項便利功能也不能緩解 Tailscale SSH 的伺服器權限問題，兩者處理的是不同層次。
+
+## 值得追蹤的版本、RFC 與提案
+
+- [Tailscale 調查更新](https://tailscale.com/ssh-investigation-update)：追蹤正式修補版本、受影響設定與安全 advisory。程式碼已合併、客戶端已發布、主機已完成更新是不同狀態。
+- [Ghostty 1.4.0](https://ghostty.org/docs/install/release-notes/1-4-0)：優先核對安全修補與 GTK 相依需求，測試 EGL 驅動、分數縮放、貼上與既有終端機程式。
+- [Ghostty 後續時程](https://ghostty.org/docs/install/release-notes/1-4-0)：官方規劃 1.5 於 2027 年 3 月推出，libghostty 另有發布週期。這是路線圖，不是已發布承諾。
+- [libghostty 與 Windows](https://ghostty.org/docs/install/release-notes/1-4-0)：官方取消 Ghostty GUI 的 Windows 路線圖，但表示 libghostty 支援 Windows 並有 CI 測試。函式庫支援不能寫成官方桌面程式已支援。
+- 本期沒有納入具備足夠交叉佐證的新 RFC，不以舊提案填補篇幅。
+
+## 參考來源表
+
+以下於 2026-10-28 查閱，取得內容時未遇到付費牆。不同發布者可能引用相同研究，來源數不能當成獨立漏洞重現次數。
+
+| 日期 | 原文標題與連結 | 用途與限制 |
+| --- | --- | --- |
+| 2026-10-26 | [Tailscale SSH: Investigation and remediation update](https://tailscale.com/ssh-investigation-update) | 官方確認事項、緩解措施與尚待發布的修補資訊 |
+| 2026-10-27 | [Tailscale Rushes Patches After Uncoordinated Disclosure of 'Tailworm' Flaws](https://www.securityweek.com/tailscale-rushes-patches-after-uncoordinated-disclosure-of-tailworm-flaws/) | 獨立媒體報導，區分研究指控與官方回應 |
+| 2026-10-27 | [Tailscale warns of SSH flaws allowing root privilege escalation](https://www.bleepingcomputer.com/news/security/tailscale-warns-of-serious-ssh-flaws-allowing-root-privilege-escalation/) | 研究前置條件與不同元件分類 |
+| 2026-10-27 | [1.4.0 - Release Notes](https://ghostty.org/docs/install/release-notes/1-4-0) | 官方安全公告、效能條件、平台需求與路線圖 |
+| 2026-10-27 | [Ghostty 1.4 Terminal Emulator Cuts Memory Usage, Boosts Performance](https://linuxiac.com/ghostty-1-4-terminal-emulator-cuts-memory-usage-boosts-performance/) | 第三方發布報導，效能資料仍引用官方 |
+| 2026-10-27 | [Ghostty 1.4 says scrollback compression saves 70-90%. I measured five kinds of text.](https://dev.to/frankchu/ghostty-14-says-scrollback-compression-saves-70-90-i-measured-five-kinds-of-text-2l06) | 獨立作者的 zlib 對照實驗，不是 Ghostty benchmark |
+| 查閱於 2026-10-28 | [SSH - Features](https://ghostty.org/docs/features/ssh) | 補充 API 用法，非另一則新聞；頁面部分版本註記仍沿用發布前文字 |
+
+## 延伸閱讀方向
+
+- SSH forwarding 的 Unix 權限切換與授權後隔離
+- 遠端管理服務的安全更新、替代連線通道與驗收
+- 終端機控制序列、貼上保護與超連結處理
+- pty 讀取、解析執行緒與背壓設計
+- 分頁壓縮、resident memory 與工作負載選擇
+- EGL、DMABUF 與 GTK 分數縮放
