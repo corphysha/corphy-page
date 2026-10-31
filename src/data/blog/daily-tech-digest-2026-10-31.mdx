@@ -1,0 +1,180 @@
+---
+title: "Cursor 擴充套件遭植入後門、Node.js 26 進入 LTS：2026-10-31 技術日報"
+description: "核對 Cursor 市集遭竄改 Claude Code 擴充套件的影響範圍、Node.js 26.13.0 與 Vercel 執行環境升級，以及 Dependabot reachability analysis 的判讀與預覽限制。"
+date: 2026-10-31
+tags: ["daily-digest", "security", "nodejs", "github", "supply-chain"]
+draft: false
+---
+
+## 涵蓋範圍與方法
+
+資料截點為 2026-10-31 22:26，Asia/Taipei，收錄此前 96 小時內的公告與後續調查。上一期的 Tailscale SSH 與 Ghostty 1.4 不重複列入。本期選取三個主題，每個主題核對至少三個不同發布者的資料。第三方整理若沿用官方公告，只算交叉報導，不視為獨立實測。
+
+Cursor 事件採官方 10 月 30 日更新後的影響版本，並以 Microsoft 的程式碼分析確認行為。Node.js 與 Dependabot 以正式發布紀錄及產品文件為準，不把摘要文章中的推論當成產品保證。以下範例是機制說明，不代表已在受影響工作站或雲端正式環境執行。
+
+## 重大頭條
+
+### Cursor 市集的 Claude Code 擴充套件遭竄改，影響版本擴及 2.1.312 與 2.1.313
+
+[Cursor 安全公告](https://cursor.com/blog/claude-code-extension-security-notice)指出，10 月 29 日約 02:27 至 13:35，Pacific Time，市集曾提供遭竄改的 `Anthropic.claude-code`。更新後列出的版本為 2.1.312 與 2.1.313，對應 macOS 與 Windows 套件。惡意程式嘗試植入 SSH 授權金鑰、啟動本機 SSH、建立反向轉送，並寫入持續執行機制。
+
+[Microsoft Threat Intelligence](https://www.microsoft.com/en-us/security/blog/2026/10/30/inside-malicious-claude-code-branded-cursor-extension-persistent-ssh-backdoor/)分析了注入的 JavaScript，確認它會在正常擴充套件初始化前執行。[WIRED](https://www.wired.com/story/trojan-malware-targets-thousands-of-anthropic-claude-developer-systems/)另採訪最初發現事件的研究者，並報導 Anthropic 對官方發布管道未受影響的說明。Microsoft 也確認，這批惡意套件沒有經由 Visual Studio Marketplace 發布。
+
+為何重要：市集裡熟悉的 publisher 與版本字串，不能單獨證明實際套件可信。部分 SSH 啟動步驟因權限與程式錯誤失敗，不代表植入金鑰、資訊外傳或持續執行檔案也全部失敗。只移除擴充套件不足以完成事件處理。
+
+### Node.js 26.13.0 進入 LTS，Vercel 的寬鬆版本範圍可能觸發升級
+
+[Node.js 26.13.0 發布說明](https://nodejs.org/en/blog/release/v26.13.0)將 26.x 升為代號 Lithium 的 LTS，維護至 2029 年 4 月底。[GitHub 發布紀錄](https://github.com/nodejs/node/releases/tag/v26.13.0)標示日期為 10 月 28 日。此次相較 26.12.1 只有 LTS 中繼資料變更，不能把整條 26.x 的功能都寫成 26.13.0 新增。
+
+[Vercel 10 月 29 日公告](https://vercel.com/changelog/node-js-26-lts-is-now-generally-available-on-vercel)開放 builds 與 Functions 使用 Node.js 26，並列為新專案預設值。[Emran Hejazi 的開發者整理](https://www.emran.app/daily-developer-brief/2026-10-30)也指出，既有專案若以 `>=20` 等範圍允許 26，下一次部署可能改用新主版本。
+
+為何重要：依賴更新沒有變更 `package.json`，執行環境仍可能改變。升級計畫應涵蓋原生模組、Linux 系統函式庫與對外 HTTP 行為，不能只確認 JavaScript 編譯成功。
+
+### Dependabot 加入呼叫路徑分析，但 Unreachable 不是安全證明
+
+[GitHub 10 月 28 日公告](https://github.blog/changelog/2026-10-28-prioritize-dependabot-alerts-with-reachability-analysis/)開放 reachability analysis 公開預覽，以 CodeQL 呼叫圖檢查應用程式是否能呼叫相依套件中的已知漏洞函式。[Security.io](https://www.security.io/articles/2026/10/29/github-adds-dependency-reachability)與 [Azeem Hassni](https://azeemhassni.com/blog/wire-dependabot-reachability-analysis-preview/)分別整理了企業導入條件與判讀限制。
+
+預覽限 GitHub Enterprise Cloud 的 JavaScript、TypeScript 專案，需具備 npm、Yarn 或 pnpm lockfile，並使用 GitHub-hosted runners。功能預設關閉，需先啟用 Dependabot alerts。預覽期間免費，不計入付費 Actions 分鐘，也不要求 GitHub Advanced Security 授權。
+
+為何重要：套件存在、函式可達與漏洞可利用，是不同的判斷。這項功能改善修補排序，不會自動關閉告警，也不能用 Unreachable 結果取代後續更新。
+
+## 快速重點
+
+- [Cursor 更新後公告](https://cursor.com/blog/claude-code-extension-security-notice)同時列入 2.1.312 與 2.1.313，排查不能只搜尋最初報導的單一版本。
+- [Microsoft 分析](https://www.microsoft.com/en-us/security/blog/2026/10/30/inside-malicious-claude-code-branded-cursor-extension-persistent-ssh-backdoor/)區分程式能力、嘗試執行與實際成功；發現 SSH 程序不等於已證實遠端登入。
+- [Cursor 處置說明](https://cursor.com/blog/claude-code-extension-security-notice)要求檢查獨立於擴充套件目錄的持續執行檔案，並從可信任裝置輪替可能暴露的憑證。
+- [Node.js 26.13.0](https://nodejs.org/en/blog/release/v26.13.0)相較 26.12.1 沒有新增功能，主要變更是 LTS 狀態。
+- [Node.js Linux 二進位需求](https://nodejs.org/en/blog/release/v26.13.0)提醒，從較舊 LTS 升級時應注意自 Node.js 25 起的 `libatomic` 相依需求。
+- [Vercel Node.js 26](https://vercel.com/changelog/node-js-26-lts-is-now-generally-available-on-vercel)支援 Temporal、V8 14.6 與內建 `fetch` 的 HTTP/2；協定仍取決於遠端伺服器支援。
+- [Vercel 部署要求](https://vercel.com/changelog/node-js-26-lts-is-now-generally-available-on-vercel)指出，prebuilt Node.js 26 Functions 需搭配 Vercel CLI 65.8.0 或更新版本。
+- [Dependabot 判定規則](https://docs.github.com/en/code-security/concepts/supply-chain-security/about-reachability-analysis-for-dependabot-alerts)要求把 Potentially reachable 視為可達，而非視為低風險。
+- [Dependabot 掃描週期](https://docs.github.com/en/code-security/concepts/supply-chain-security/about-reachability-analysis-for-dependabot-alerts)為有未結案告警時每 24 小時一次；push 不會立即觸發重掃，預覽也不提供隨選掃描。
+- [Dependabot 預覽限制](https://github.blog/changelog/2026-10-28-prioritize-dependabot-alerts-with-reachability-analysis/)包括三小時分析上限與部分 monorepo 限制；無法分析不是無漏洞。
+
+## 細節說明
+
+### 擴充套件事件應分開檢查安裝、執行與遠端存取
+
+Microsoft 分析指出，注入函式在模組載入時就能使用 Node.js API 讀取主機資料、修改檔案與啟動程序。這與透過模型對話誘導執行指令不同，單靠提示規則不能阻止已載入的惡意擴充套件。攻擊嘗試把外部 SSH 連線反向轉送到本機 SSH 服務，但連線成功仍取決於本機權限、SSH 設定與遠端伺服器設定。macOS 的 LaunchAgent 與 Windows 的排程工作或 Startup 檔案可位於擴充套件目錄之外，因此移除套件不會自動清除它們。Microsoft 所分析的 loader 也包含 Linux 分支，但不能據此擴大官方已列明的受影響套件清單。
+
+較合理的調查順序是先保存安裝來源、套件與端點紀錄，再確認程式執行及檔案落地，最後核對網路與登入紀錄。下列 PowerShell 範例只做唯讀檢查，列出 Windows 上兩個 SSH 授權檔中含公開 IOC 註記的行號，不輸出金鑰內容，也不修改任何檔案。這是初步線索，不是完整偵測器。未找到字串不能排除曾遭執行，找到同名註記則仍需比對官方指紋與行為證據。
+
+```powershell
+$paths = @(
+  (Join-Path $HOME '.ssh\authorized_keys'),
+  'C:\ProgramData\ssh\administrators_authorized_keys'
+)
+
+foreach ($path in $paths) {
+  if (Test-Path -LiteralPath $path) {
+    Select-String -LiteralPath $path -SimpleMatch 'svc-telemetry' |
+      Select-Object Path, LineNumber
+  }
+}
+```
+
+這裡刻意不沿用「沒有找到金鑰就代表未受影響」的輸出。單一檔案可能已被更動，攻擊也可能只完成部分步驟。官方公告提供修復工具，但正式處置仍應先保留證據、隔離確認受影響裝置，再依調查結果決定清理或重建，以及輪替憑證的範圍。
+
+### LTS 升級要固定主版本，也要驗證實際執行環境
+
+Node.js 的發布說明與 Vercel 的功能公告分別回答不同問題。前者說明 26.13.0 的版本差異，後者說明平台如何部署 26.x，以及該系列可用的功能。Temporal、V8 14.6 與 Undici 8 不應被誤寫成這次 LTS 標籤切換才加入。對 Vercel 既有專案來說，`engines.node` 若容許 26，下一次部署就可能發生主版本變動。明確指定主版本可避免無意升級，但 Vercel 仍會自動更新該系列的小版本與修補版本。
+
+以下是升級前後的專案宣告範例，只固定 Node.js 主版本，並非凍結所有執行環境元件。
+
+```json
+{
+  "engines": {
+    "node": ">=20"
+  }
+}
+```
+
+```json
+{
+  "engines": {
+    "node": "26.x"
+  }
+}
+```
+
+部署驗收應從真正的 build 或 Function 執行環境讀取版本，而不是只看開發機。下列診斷程式檢查主版本與 LTS 標籤，並列出功能是否存在。功能存在不代表應用程式已用到它，更不證明外連請求已協商 HTTP/2。
+
+```javascript
+const major = Number(process.versions.node.split(".")[0]);
+if (major !== 26 || process.release.lts !== "Lithium") {
+  throw new Error("Expected Node.js 26 Lithium LTS");
+}
+
+console.log({
+  node: process.version,
+  lts: process.release.lts,
+  v8: process.versions.v8,
+  temporal: typeof globalThis.Temporal !== "undefined",
+  getOrInsert: typeof Map.prototype.getOrInsert === "function",
+});
+```
+
+Vercel 的內建 `fetch` 對支援的服務預設使用 HTTP/2。若 Function 的上游服務與新協定行為不相容，公告提供 `VERCEL_FETCH_DISABLE_H2=1` 作為維持 HTTP/1.1 的方式，設定後需重新部署。這是 Vercel Functions 的平台選項，不應當成所有 Node.js 主機通用的開關。升級測試仍需涵蓋逾時、代理、重試與連線池行為，不能把支援多工直接換算成固定效能提升。
+
+### Reachability 的未知狀態不能落入低優先佇列
+
+Dependabot 先依 advisory 的已整理資料找出漏洞函式，再以 CodeQL 建立專案與相依套件的呼叫圖。找到路徑時是 Reachable，無法排除呼叫時是 Potentially reachable。分析完成且未找到路徑才是 Unreachable，掃描失敗、逾時或不支援則屬 Reachability unavailable。GitHub 文件明確要求，Unreachable 不足以作為關閉或忽略告警的唯一理由。呼叫路徑證明程式可能走到某個函式，不證明攻擊者能控制必要輸入或滿足漏洞利用條件。
+
+下列程式示範內部工單的路由政策，不是 GitHub REST API 的回應格式。第一版把所有非 Reachable 結果都排到後面，會誤降 Potentially reachable 與掃描失敗的優先度。修正版保留一般分流程序，只有確認 Unreachable 才標為較低優先，且不自動結案。
+
+```javascript
+// 錯誤示範：把未知與分析失敗都當成低優先。
+function incorrectQueue(verdict) {
+  return verdict === "Reachable" ? "review-first" : "lower-priority";
+}
+
+// 示意政策：最終排序仍須加入嚴重度、EPSS 與正式環境脈絡。
+function reviewQueue(verdict) {
+  switch (verdict) {
+    case "Reachable":
+    case "Potentially reachable":
+      return "review-first";
+    case "Unreachable":
+      return "lower-priority-keep-open";
+    case "Reachability unavailable":
+    default:
+      return "normal-triage";
+  }
+}
+```
+
+時間也會影響判讀。GitHub 文件指出，push 不會觸發重掃，結果要等下一次掃描完成才更新。若剛合併的程式碼開始呼叫漏洞函式，先前的 Unreachable 仍可能暫時顯示。介面最多列出五條範例路徑，不代表所有路徑的完整清單。工單應保留判定時間、程式碼版本與呼叫路徑證據，避免把過去一次分析結果當成永久豁免。
+
+## 值得追蹤的版本、RFC 與提案
+
+- [Cursor 事件公告](https://cursor.com/blog/claude-code-extension-security-notice)後續是否補足入侵市集的原因、受影響套件與 IOC。現階段不以媒體的下載數估計當成已證實受控主機數。
+- [Node.js 26.13.0](https://github.com/nodejs/node/releases/tag/v26.13.0)之後的 LTS 修補版本，以及原生模組在目標 Linux 映像上的相容性。此次沒有理由把 LTS 切換解讀成全新 ABI 變更。
+- [Vercel Node.js 26](https://vercel.com/changelog/node-js-26-lts-is-now-generally-available-on-vercel)的 CLI 65.8.0 門檻、實際部署版本與 HTTP/2 相容性；平台支援與應用程式完成驗收應分開記錄。
+- [Dependabot 公開預覽](https://docs.github.com/en/code-security/concepts/supply-chain-security/about-reachability-analysis-for-dependabot-alerts)的語言、lockfile、runner 與 monorepo 支援。目前公告沒有列出 Bun lockfile，不能假設只有 `bun.lock` 的專案也適用。
+
+## 參考來源表
+
+同一組織的公告與文件不重複計為獨立來源。第三方文章主要協助交叉核對發布事件，產品細節仍回到官方文件。下列來源正文均可取得；WIRED 可能依地區或閱讀額度要求訂閱。
+
+| 日期 | 原文標題與連結 | 性質與限制 |
+| --- | --- | --- |
+| 2026-10-29，更新於 10-30 | [Security notice: malicious version of Anthropic.claude-code identified in the Cursor VS Code Extension Marketplace](https://cursor.com/blog/claude-code-extension-security-notice) | 官方事件公告，採更新後兩個版本清單；標題標點以冒號呈現 |
+| 2026-10-30 | [Inside a malicious Claude Code-branded extension and its persistent SSH backdoor](https://www.microsoft.com/en-us/security/blog/2026/10/30/inside-malicious-claude-code-branded-cursor-extension-persistent-ssh-backdoor/) | 獨立程式碼分析，區分能力與成功執行 |
+| 2026-10-30 | [A Supply Chain Attack Put Malicious Anthropic Claude Extensions on Thousands of Devices](https://www.wired.com/story/trojan-malware-targets-thousands-of-anthropic-claude-developer-systems/) | 獨立採訪，可能有動態付費牆 |
+| 2026-10-28 | [Node.js 26.13.0 (LTS)](https://nodejs.org/en/blog/release/v26.13.0) | 官方差異與系統相依需求 |
+| 2026-10-28 | [2026-10-28, Version 26.13.0 'Lithium' (LTS), @richardlau](https://github.com/nodejs/node/releases/tag/v26.13.0) | 官方發布時間，與 Node.js 官網屬同一來源 |
+| 2026-10-29 | [Node.js 26 LTS is now Generally Available on Vercel](https://vercel.com/changelog/node-js-26-lts-is-now-generally-available-on-vercel) | 平台預設、升級與 CLI 條件 |
+| 2026-10-30 | [Adaptable infrastructure needs explicit dependencies](https://www.emran.app/daily-developer-brief/2026-10-30) | 第三方整理，非獨立效能測試 |
+| 2026-10-28 | [Prioritize Dependabot alerts with reachability analysis](https://github.blog/changelog/2026-10-28-prioritize-dependabot-alerts-with-reachability-analysis/) | 官方預覽範圍與方案條件 |
+| 查閱於 2026-10-31 | [About reachability analysis for Dependabot alerts](https://docs.github.com/en/code-security/concepts/supply-chain-security/about-reachability-analysis-for-dependabot-alerts) | 補充掃描週期與判讀，非另一則新公告 |
+| 2026-10-29 | [GitHub makes dependency reachability a new enterprise triage input](https://www.security.io/articles/2026/10/29/github-adds-dependency-reachability) | 第三方企業安全分析 |
+| 2026-10-28 | [Dependabot can now tell you if a vulnerability is actually reachable](https://azeemhassni.com/blog/wire-dependabot-reachability-analysis-preview/) | 不同作者的交叉整理，依據官方公告 |
+
+## 延伸閱讀方向
+
+- IDE 擴充套件的發布來源、雜湊驗證與端點遙測
+- SSH 反向轉送的權限條件與持續執行機制
+- Node.js LTS 遷移、原生模組與 Linux 動態函式庫相依
+- HTTP/2 協商、連線池與 Function 對外連線行為
+- 靜態呼叫圖、動態分派與可達性分析的限制
+- 漏洞可達性、可利用性與修補優先順序的差異
