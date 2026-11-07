@@ -1,0 +1,162 @@
+---
+title: "Playwright 1.65 的相容性界線與 Parcel 3 的 Rust 重寫：2026-11-07 技術日報"
+description: "解析 Playwright 的 Bun runner、class fields 與失敗報告，以及 Parcel 3 alpha 的冷建置、QuickJS 外掛與遷移限制。"
+date: 2026-11-07
+tags: ["daily-digest", "testing", "playwright", "parcel", "rust"]
+draft: false
+---
+
+## 涵蓋範圍與方法
+
+資料截點為 2026-11-07 09:00，Asia/Taipei，採用此前 96 小時內發布的消息。核對 11 月 4 日的 Pando 與 Claude message threads 後，本期選入兩則未重複事件。Playwright 交叉比對官方 release notes、ArtStroy 與 Vuetron；Parcel 交叉比對官方公告、WittyWires 與 Devshot。三個發布者不等於三次獨立實驗，媒體報導仍多依據官方資料。
+
+效能數字保留官方測試情境，不當成通用保證。程式碼為依文件整理的教學範例，並未在本文重跑 Playwright 1.65 或 Parcel 3 alpha。其餘未完成同等驗證的消息不補入篇幅。
+
+## 重大頭條
+
+### Playwright 1.65 可用 Bun 執行，但升級風險先看 class fields
+
+[Playwright 1.65.0](https://github.com/microsoft/playwright/releases/tag/v1.65.0)於 11 月 5 日 18:25:45 UTC 發布，新增 Bun runner、失敗導向 reporter 與排他測試鎖。[ArtStroy 的遷移指南](https://artstroy.net/articles/playwright_1_65_0_whats_new_automation_qa)與 [Vuetron 的整理](https://vuetron.io/article/playwright-v1-65-0-adds-bun-runner-support-and-failure-focused-reporting.html)都提醒，模組載入與除錯資訊在 Bun 下不同。
+
+為何重要：這次更新可能改變既有測試的結果，不只是啟動速度。TypeScript 欄位初始化現在遵循 `useDefineForClassFields`，元素操作也會等待目標不再是 `inert`。若直接把 runtime 切換與版本升級綁在一起，失敗原因會更難分辨。較合理的順序是先在既有 Node 環境處理相容性，再單獨評估 Bun。
+
+### Parcel 3 alpha 把核心改寫成 Rust，也改變外掛執行環境
+
+[Parcel 於 11 月 4 日發布 v3 alpha 公告](https://v3.parceljs.org/blog/v3-alpha/)。CLI、dev server、transformer 與 bundler 都進入獨立 Rust binary，工具本身不再依賴 Node。[WittyWires](https://wittywires.com/forums/topic/parcel-3-alpha-rewrites-the-web-bundler-in-rust/)與 [11 月 6 日 Devshot](https://devshot.co/archives/devshot-20261106-17)均報導這項重寫。
+
+為何重要：Parcel 不是只替換一個 parser，而是移除核心跨 worker 與跨語言傳輸的部分成本。代價也很明確，JavaScript 外掛改由嵌入式 QuickJS 執行，不能假設完整 Node 相容。這仍是 alpha，缺少型別宣告產生等功能；現有 library pipeline 不宜只憑效能標題就替換。
+
+## 快速重點
+
+以下是兩則事件的技術摘要，不另計為獨立新聞。
+
+- [Playwright 官方筆記](https://github.com/microsoft/playwright/releases/tag/v1.65.0)要求使用 `bunx --bun playwright test`，省略 `--bun` 仍執行 Node runner。
+- [Bun 模式](https://github.com/microsoft/playwright/releases/tag/v1.65.0)不支援 watch mode，UI mode 不會因檔案變更自動重跑。
+- [Reporter 更新](https://github.com/microsoft/playwright/releases/tag/v1.65.0)可保留 unexpected、flaky 與 interrupted 測試，不是只留下最後仍失敗的案例。
+- [相容性變更](https://github.com/microsoft/playwright/releases/tag/v1.65.0)將 proxy 認證限制在代理伺服器 challenge，網站認證應使用 `httpCredentials`。
+- [Parcel 3](https://v3.parceljs.org/blog/v3-alpha/)仍有記憶體內增量重建，不應把減少磁碟快取寫成完全沒有快取。
+- [QuickJS 外掛環境](https://v3.parceljs.org/blog/v3-alpha/)只有部分 Node 相容能力，並刻意不提供網路存取。
+- [Parcel alpha 限制](https://v3.parceljs.org/blog/v3-alpha/)包含尚未支援的 `.d.ts` 產生與 programmatic JavaScript API。
+
+## 細節說明
+
+### Bun 改的是 runner，不是瀏覽器引擎
+
+Playwright 的 [release notes](https://github.com/microsoft/playwright/releases/tag/v1.65.0)指出，Bun 自行轉譯 TypeScript，因此不走 Playwright 的 Babel 與轉譯快取。官方 CI 測試的是 Linux 上的 Bun 1.4.3，不能延伸成所有平台都已完成相同測試。Bun 自行載入模組後，`--tsconfig` 與 tsconfig 的 JSX 選項不生效，自訂 ESM loader 也不支援。Stack trace 不含 async frames，API 名稱可能由 `locator.click` 縮成 `click`。測試的 console 輸出也不會進入 trace 與 UI mode，這直接影響失敗診斷，而非單純顯示偏好。
+
+下列命令呈現兩條不同執行路徑，不代表本文有量測加速比。瀏覽器測試仍由 Playwright 驅動，runner 換成 Bun 不等於把 Chromium 換成另一個引擎。
+
+```bash
+# 安裝工具使用 Bun，不代表 runner 使用 Bun
+bunx playwright test
+
+# 明確使用 Bun runtime
+bunx --bun playwright test
+```
+
+評估時應固定測試選集、瀏覽器版本與 worker 數。先比較測試是否一致通過，再比較總時間與失敗資訊完整度。若需要 UI watch 或 custom loader，維持 Node 是功能需求，不是錯過更新。
+
+### Page object 的初始化順序需要明寫
+
+在 ES2022 以上或未指定 target 時，class fields 預設採 define semantics。[官方範例](https://github.com/microsoft/playwright/releases/tag/v1.65.0)中的欄位 initializer 先執行，但 TypeScript constructor parameter property 此時還沒完成指派。因此 `this.page` 尚未可用，讀取 `getByRole` 就會失敗。這不是 locator 等待逾時，也不是頁面載入比較慢。把初始化移入 constructor，才能直接表達依賴順序。
+
+改前，以下寫法在該語意下有風險：
+
+```typescript
+import type { Page } from "@playwright/test";
+
+class LoginPage {
+  readonly submit = this.page.getByRole("button", { name: "Submit" });
+  constructor(private readonly page: Page) {}
+}
+```
+
+改後，不依賴 parameter property 與欄位 initializer 的相對時序：
+
+```typescript
+import type { Locator, Page } from "@playwright/test";
+
+class LoginPage {
+  readonly submit: Locator;
+
+  constructor(page: Page) {
+    this.submit = page.getByRole("button", { name: "Submit" });
+  }
+}
+```
+
+官方也列出設定 `useDefineForClassFields: false` 的替代方案，但那會改變整個專案的欄位語意。局部移動初始化通常更容易審查。除此之外，`click`、`fill` 等操作如今會等待元素及其所在區域不再 inert，舊測試若一直卡住，應先檢查 dialog 或 loading 狀態，而非立刻增加 timeout。
+
+### 失敗報告與完整測試統計應分開
+
+新 `failures` reporter 會印出失敗與成功重試，最後附摘要，不持續輸出進度。[官方文件](https://github.com/microsoft/playwright/releases/tag/v1.65.0)也讓 HTML、JSON 與 JUnit 接受 `onlyFailures`。篩選仍保留 flaky 與 interrupted，因為最終重試成功不代表第一次失敗沒有診斷價值。[ArtStroy](https://artstroy.net/articles/playwright_1_65_0_whats_new_automation_qa)特別提醒，若統計系統用完整 JUnit 計算案例數，直接過濾會讓測試總量看似突然減少。因此下例只篩選人類閱讀的 HTML，保留完整 JUnit。
+
+```typescript
+import { defineConfig } from "@playwright/test";
+
+export default defineConfig({
+  reporter: [
+    ["failures"],
+    ["html", { onlyFailures: true }],
+    ["junit", { outputFile: "test-results/full.xml" }],
+  ],
+});
+```
+
+這是報告策略建議，不是官方強制配置。新增的 `-exclusive-` 鎖適合重啟共用伺服器等破壞性操作，但不應當成跨不同 CI job 的分散式鎖。另須注意官方不再測試 Node.js 20，Docker image 改用 Node.js 26；runtime 與容器版本應一起納入升級審查。
+
+### Parcel 的冷建置策略如何降低快取管理成本
+
+[官方公告](https://v3.parceljs.org/blog/v3-alpha/)以 React Spectrum monorepo 的冷開發建置比較 v2 與 v3，列出約 100 個 Storybook entries、約 340 頁文件站與約 160 個 library packages 等工作負載。公告的「最高 100 倍」是特定比較結果，不是任意專案的預期值。部分自訂外掛也移植成 Rust，不能把整個差異只歸因於語言。本文未重跑該 benchmark，也不把搜尋摘要當成測量結果。
+
+v2 必須追蹤檔案、環境變數、選項與配置如何使磁碟快取失效。v3 選擇先降低冷建置成本，不再逐筆把 transformation result 寫入磁碟。對外掛或配置變更，直接完整重建可以少處理一類過期快取問題。這不表示每次改一個檔案都從零開始，記憶體內的 incremental rebuild 仍保留。真正要比較的是冷啟動、連續編輯與配置變更三種情境，而非只挑最快的一次輸出。
+
+### 外掛可用 Rust，不代表 JavaScript 外掛原封不動可用
+
+Parcel 3 的 native plugins 是載入程序內的 dynamic libraries，經穩定 C ABI 存取 asset 與 bundle graph。[公告](https://v3.parceljs.org/blog/v3-alpha/)列出 Rust、Go 與 Swift SDK，並提供跨平台建置發布流程。JavaScript 與 TypeScript 外掛則走 QuickJS，不走 Node 或 V8。官方看重的是啟動成本、記憶體占用與多執行緒嵌入能力，不宣稱 QuickJS 峰值效能勝過 V8。需要網路或完整 Node APIs 的既有外掛，必須先盤點依賴。
+
+以下取自官方集中配置範例，說明外掛選擇與其參數都放入 `.parcelrc`。這不是所有專案都應採用的分包設定。
+
+```json
+{
+  "extends": "@parcel/config-default",
+  "bundler": {
+    "plugin": "@parcel/bundler-default",
+    "config": {
+      "minBundleSize": 30000,
+      "manualSharedBundles": [
+        { "assets": ["node_modules/**"] }
+      ]
+    }
+  }
+}
+```
+
+集中配置讓工具在建置開始時一次解析，而非不斷搜尋散落的設定檔。遷移時仍須檢查 bundle 邊界、CSS 順序與輸出檔案，不能只驗證 CLI 回傳成功。官方表示 v3 的 CSS splitting 會在能證明安全時才抽取共用樣式，並對衝突的匯入順序發出警告。這類正確性條件，比單純少產生幾個 chunk 更值得在真實專案驗證。
+
+## 值得追蹤的版本與提案
+
+- [Playwright 1.65.0](https://github.com/microsoft/playwright/releases/tag/v1.65.0)：追蹤 Bun 限制、class fields、cookie path matching 與 inert 等待的遷移結果。這是已發布版本，不是 RFC。
+- [Parcel 3 alpha](https://v3.parceljs.org/blog/v3-alpha/)：觀察 `.d.ts` generation、compressor plugins、自訂 bundler plugins 與 programmatic JavaScript API 的補齊情況。尚未支援的能力不能列成穩定版承諾。
+- 本期未選入已完成同等查證的新 RFC，不以舊提案補足清單。
+
+## 參考來源表
+
+日期採來源顯示時間，UTC 明列者保留時區。以下來源擷取時皆無需付費解鎖；二手文章不是獨立效能實驗。
+
+| 原文標題 | 發布時間 | 來源與連結 | 付費牆 |
+| --- | --- | --- | --- |
+| v1.65.0 | 2026-11-05 18:25:45 UTC | [microsoft/playwright](https://github.com/microsoft/playwright/releases/tag/v1.65.0) | 無 |
+| Playwright 1.65: What's New, Breaking Changes & Migration Guide | 2026-11-06 | [ArtStroy](https://artstroy.net/articles/playwright_1_65_0_whats_new_automation_qa) | 無 |
+| Playwright v1.65.0 Adds Bun Runner Support and Failure-Focused Reporting | 2026-11-06 | [Vuetron](https://vuetron.io/article/playwright-v1-65-0-adds-bun-runner-support-and-failure-focused-reporting.html) | 無 |
+| Announcing Parcel 3 alpha | 2026-11-04 | [Parcel](https://v3.parceljs.org/blog/v3-alpha/) | 無 |
+| Parcel 3 alpha rewrites the web bundler in Rust | 2026-11-04 | [WittyWires](https://wittywires.com/forums/topic/parcel-3-alpha-rewrites-the-web-bundler-in-rust/) | 無 |
+| Discord rewrites its app in Rust | 2026-11-06 | [Devshot，含 Parcel 報導](https://devshot.co/archives/devshot-20261106-17) | 無 |
+
+## 延伸閱讀方向
+
+- TypeScript class field semantics 與 constructor 初始化順序
+- 測試報告篩選與 CI 完整案例數的資料契約
+- 冷建置、磁碟快取失效與記憶體內增量重建
+- C ABI 外掛的生命週期與跨平台發布
+- CSS code splitting 對 cascade order 的影響
