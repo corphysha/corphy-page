@@ -1,0 +1,135 @@
+---
+title: "AWS Emulator 與 A2UI 1.0：代理的測試迴圈與互動介面，2026-11-13 技術日報"
+description: "解析 AWS Emulator 的相容性測試、合併門檻與本地執行風險，以及 A2UI 1.0 的雙向函式呼叫、元件目錄與 renderer 版本差異。"
+date: 2026-11-13
+tags: ["daily-digest", "aws", "testing", "a2ui", "agents"]
+draft: false
+---
+
+## 涵蓋範圍與方法
+
+資料截點為 2026-11-13 09:00，Asia/Taipei，納入此前 96 小時內公布的事件。已比對 11 月 10 日前一期日報，本期不重複 Developer Hub 2.1。廣泛蒐集後，選擇 11 月 11 日發布的 AWS Emulator 與 A2UI 1.0 深讀，未達查證標準的題目不補入清單。
+
+AWS 事件交叉核對 Amazon、GeekWire 與 InfoWorld；A2UI 事件核對 Google、SD Times 與 CopilotKit。這是不同發布者的交叉參照，不代表三方各自完成產品實測。CopilotKit 是合作整合方，SD Times 主要轉述官方公告，不能視為獨立安全驗證。以下明確區分公告內容、媒體質疑與工程建議，不採用未經重現的效能倍數。
+
+## 重大頭條
+
+### AWS Emulator 把雲端 API 測試搬到本地，品質依據是行為比對
+
+Amazon 於 11 月 11 日[發布 AWS Emulator](https://www.aboutamazon.com/news/aws/how-autonomous-ai-agents-built-aws-emulator)，讓開發者在本機測試依賴 AWS 的應用。官方稱原始碼全部由自主代理撰寫，工程團隊沒有撰寫或人工審閱這些程式碼；這是廠商對開發流程的陳述，不等於產品已沒有缺陷。[GeekWire](https://www.geekwire.com/2026/aws-gives-developers-a-free-local-stand-in-for-its-cloud-built-from-scratch-by-ai-agents/)確認發布與三組代理的分工；[InfoWorld](https://www.infoworld.com/article/4247383/aws-unveils-local-emulator-service-to-help-enterprises-accelerate-app-development-and-testing.html)則指出節流、故障與區域差異等模擬限制。
+
+為何重要：代理每次修改後反覆部署到真實雲端，會累積等待時間、資源費用與清理工作。本地回饋可以縮短這個迴圈，但真正值得分析的是 AWS 如何把真實服務當作參照，再用測試與合併門檻約束修改。「本地通過」仍不能取代上線前的雲端整合測試。
+
+### A2UI 1.0 讓代理回傳互動介面，宿主相容性仍須逐一確認
+
+Google 於 11 月 11 日[發布 A2UI 1.0](https://developers.googleblog.com/a2ui-10-build-delightful-fast-reliable-agentic-experiences/)，稱為其開放 generative UI 協定的第一個穩定版本。代理描述畫面，應用使用已登錄的原生元件繪製，而不是直接執行模型產生的任意介面程式碼。[SD Times](https://sdtimes.com/user-interface/google-releases-a2ui-1-0-for-generative-ui/)確認版本與 SDK 方向；[CopilotKit](https://www.copilotkit.ai/blog/introducing-a2ui-1-0)進一步展示雙向函式呼叫、多目錄組合與資料繫結格式。
+
+為何重要：表單確認、庫存查詢與方案比較，不必全靠多輪文字描述。不過，穩定的是協定版本，不代表每個 renderer 或宿主同步升級。Google 公告仍把 Jetpack Compose 與 Gemini 的既有支援列為 0.9.1，Lynx 則是 0.9。部署時必須核對接收端，而不是只升級產生訊息的 SDK。
+
+## 快速重點
+
+以下為兩則事件的技術拆解，不另計為獨立新聞。
+
+- [AWS 的第一組代理](https://www.aboutamazon.com/news/aws/how-autonomous-ai-agents-built-aws-emulator)根據公開 API models 設計情境，先在真實 AWS 驗證測試。
+- [第二組與第三組代理](https://www.aboutamazon.com/news/aws/how-autonomous-ai-agents-built-aws-emulator)分別重播測試、歸納問題與修正單一 issue，修改須通過編譯、安全及回歸檢查。
+- [本地端點切換](https://www.infoworld.com/article/4247383/aws-unveils-local-emulator-service-to-help-enterprises-accelerate-app-development-and-testing.html)可使用 `AWS_ENDPOINT_URL`；相容性仍取決於實際操作是否已實作並驗證。
+- [InfoWorld 引述的限制](https://www.infoworld.com/article/4247383/aws-unveils-local-emulator-service-to-help-enterprises-accelerate-app-development-and-testing.html)包含未模擬節流、故障與區域可用性，以及不會沙箱化所執行的程式碼。
+- [AWS 公開原始碼與 fidelity tests](https://www.aboutamazon.com/news/aws/how-autonomous-ai-agents-built-aws-emulator)，採 CC0 public dedication；公開不等於相容性已完整。
+- [A2UI 1.0 的雙向函式呼叫](https://www.copilotkit.ai/blog/introducing-a2ui-1-0)可讓表單在原畫面查驗資料，不必每次重建完整回覆。
+- [同一 surface 可混合多個 catalogs](https://www.copilotkit.ai/blog/introducing-a2ui-1-0)，但它們必須使用相同 A2UI 規格版本，renderer 也必須支援。
+- [使用者啟動限制](https://www.copilotkit.ai/blog/introducing-a2ui-1-0)可阻止特定副作用函式在畫面繪製時自行觸發，不等於後端授權已完成。
+- [Google 的版本清單](https://developers.googleblog.com/a2ui-10-build-delightful-fast-reliable-agentic-experiences/)明列尚未升級的宿主與 renderer，不能把「有 SDK」解讀為所有平台都支援 1.0。
+
+## 細節說明
+
+### AWS 的參照測試比「代理寫了多少程式碼」更有用
+
+[官方文章](https://www.aboutamazon.com/news/aws/how-autonomous-ai-agents-built-aws-emulator)以 SQS 情境說明 fidelity test：建立佇列、傳送訊息、接收、確認並刪除佇列。這比單獨測試一個 API 是否回傳成功更接近應用需求。第一組代理先確認情境能在真實 AWS 執行，才將它納入測試集。第二組代理把相同情境套到 emulator，找出行為差異，並嘗試將同根因的失敗歸成 issue。第三組代理只處理被分派的問題，避免一次修改的責任範圍失控。
+
+修正還須通過編譯、程式規範、安全檢查與 fidelity 回歸門檻。官方說明主要開發儲存庫在 CodeCommit，GitHub 是發布流程末端才同步的原始碼，不應把公開 commit 頻率直接當成內部代理的即時工作紀錄。測試可重播也不表示所有 AWS 行為都已涵蓋。服務支援數字在不同報導中口徑不同，本文不把 API models 數量換算成完整服務相容率。評估時更有用的問題是某個應用實際使用的操作、錯誤與多步驟流程是否通過。
+
+### 端點切換要避免悄悄回到真實雲端
+
+[InfoWorld](https://www.infoworld.com/article/4247383/aws-unveils-local-emulator-service-to-help-enterprises-accelerate-app-development-and-testing.html)指出 CLI 與 SDK 可透過本地 HTTP 端點使用 emulator。這減少為測試改寫業務邏輯的需求，也產生另一個風險：如果測試漏設端點，原本打算在本地執行的操作可能送到真實 AWS。以下為本文的測試腳本設計示例，不是官方安裝指令，也沒有假設 emulator 的預設連接埠。執行前須自行啟動 emulator，並設定其實際端點。重點是缺少設定時立即失敗，不自動退回正式環境。
+
+```bash
+# 改前：依賴目前 profile 與預設雲端端點。
+aws sqs list-queues
+
+# 改後：測試程序必須明確指定已啟動的本地端點。
+set -eu
+: "${LOCAL_AWS_ENDPOINT:?請設定已啟動的 emulator 端點}"
+case "$LOCAL_AWS_ENDPOINT" in
+  http://127.0.0.1:*|http://localhost:*) ;;
+  *) printf '%s\n' '拒絕非本機測試端點' >&2; exit 1 ;;
+esac
+AWS_ACCESS_KEY_ID=test \
+AWS_SECRET_ACCESS_KEY=test \
+AWS_EC2_METADATA_DISABLED=true \
+AWS_DEFAULT_REGION=us-east-1 \
+aws --endpoint-url "$LOCAL_AWS_ENDPOINT" sqs list-queues
+```
+
+這段程式只約束該次 CLI 呼叫，不是網路隔離或憑證隔離的完整方案。若被測函式自行建立 SDK client、覆寫端點或使用另一組憑證，仍可能連到外部服務。InfoWorld 引述分析師指出 emulator 不會沙箱化所執行的程式碼，因此不應將正式憑證注入測試函式。合理的工程做法是使用獨立測試執行環境與網路政策，並保留真實雲端的驗收階段。以上為本文建議，不是產品已自動提供的保護。
+
+### 缺少失敗模式，重試邏輯就沒有被測到
+
+本地模擬的價值在於便宜且容易重跑，不在於重現每一種雲端事故。[InfoWorld 的受訪者](https://www.infoworld.com/article/4247383/aws-unveils-local-emulator-service-to-help-enterprises-accelerate-app-development-and-testing.html)特別指出節流、部分故障與區域差異是 SRE 關心的失敗來源。若測試永遠拿到成功結果，指數退避、逾時上限與重複請求處理都可能沒有被驗收。報導也指出未實作或未驗證的操作會回傳 HTTP 503，不能一律當作暫時性雲端故障後無限重試。測試報告應區分應用缺陷、emulator 缺口與刻意注入的錯誤。
+
+因此，測試分層比追求一個「全綠」圖示重要。本地情境適合檢查資料流與常見 API 行為。故障注入應另測逾時、節流與部分成功，真實 AWS 階段則確認權限、區域與部署差異。這是工程上的驗收安排，不是本文已完成的 emulator 實測。發布報導可以確認產品存在，不能替某個應用簽署相容性保證。
+
+### A2UI 1.0 的函式呼叫有明確識別，不只是按鈕文字
+
+[CopilotKit 的技術文章](https://www.copilotkit.ai/blog/introducing-a2ui-1-0)提供以下 1.0 訊息範例。畫面以 `surfaceId` 指出來源，`functionCallId` 識別這次呼叫，`@call` 則指出目標函式。這讓原畫面可以向代理查驗 provider ID，再將結果放回相關元件。它不是要求模型產生一段 JavaScript 後讓瀏覽器直接執行。函式能否被呼叫，仍由 catalog 與 renderer 的規則決定。
+
+```json
+{
+  "version": "1.0",
+  "callAgentFunction": {
+    "surfaceId": "contact_form_1",
+    "functionCallId": "verify_provider_99",
+    "callFunction": {
+      "@call": "verifyProvider",
+      "args": {
+        "providerId": "PRV-102"
+      }
+    }
+  }
+}
+```
+
+識別碼提供關聯依據，卻不自動保證重試冪等或使用者已授權。後端仍須驗證呼叫者能否讀取該筆資料，並處理失效的 surface 與延遲回覆。如果查驗結果尚未返回就換了輸入值，也應避免舊結果覆蓋新狀態。這些是應用層責任，不能只靠通過 JSON schema 解決。協定把互動表達得更明確，沒有消除分散式請求原本的時序問題。
+
+### 元件目錄限制輸出，資料與副作用仍須另外驗證
+
+[Google 公告](https://developers.googleblog.com/a2ui-10-build-delightful-fast-reliable-agentic-experiences/)強調應用以自己的元件繪製畫面。CopilotKit 進一步說明 1.0 可在同一 surface 混用不同目錄，並宣告元件允許的父子關係。這有助於拒絕模型臨時編造的元件或錯誤組合，但目錄中的合法元件仍可能顯示錯誤價格或過時庫存。結構合法與內容正確是兩個不同驗收項目。對會觸發操作的函式，還要確認它是否要求真實使用者互動。
+
+例如 CopilotKit 說明 `requiresUserActivation` 可限制開啟連結等操作，避免在繪製或資料繫結時直接執行。這不是付款、建立訂單或讀取個資的完整授權政策。後端仍須重新核對身分、資料權限與業務條件。敏感值是否送進模型，也取決於實際資料繫結與整合方式，不能把官方的安全定位當作所有部署都不會外送資料的證明。版本升級時應同時測試拒絕未知元件、非法函式與不相容目錄的失敗路徑。
+
+## 值得追蹤的版本、RFC 與提案
+
+- [AWS Emulator](https://www.aboutamazon.com/news/aws/how-autonomous-ai-agents-built-aws-emulator)：追蹤應用需要的操作與 fidelity tests，以及公開的已知缺口，不用單一服務總數判斷能否取代雲端測試。
+- [A2UI 1.0](https://developers.googleblog.com/a2ui-10-build-delightful-fast-reliable-agentic-experiences/)：追蹤 Jetpack Compose、Gemini 與 Lynx 的接收端版本，先確認目標環境再安排遷移。
+- [A2UI 的 0.9 遷移說明](https://www.copilotkit.ai/blog/introducing-a2ui-1-0)：核對資料繫結、函式呼叫、目錄與驗證回覆，不將升級簡化為修改版本字串。
+- 本期沒有納入達到同等查證標準的新 RFC；A2UI 是開放協定的產品發布，不在此宣稱為標準組織核准的標準。
+
+## 參考來源表
+
+下列來源皆為 2026-11-11 發布，擷取時可讀取正文，未遇到付費解鎖。媒體報導與合作方文件不是獨立安全稽核。
+
+| 原文標題 | 發布日期 | 可點擊來源 | 付費牆 |
+| --- | --- | --- | --- |
+| How we built the agents that built AWS Emulator | 2026-11-11 | [Amazon](https://www.aboutamazon.com/news/aws/how-autonomous-ai-agents-built-aws-emulator) | 擷取時無 |
+| AWS gives developers a free local stand-in for its cloud, built from scratch by AI agents | 2026-11-11 | [GeekWire](https://www.geekwire.com/2026/aws-gives-developers-a-free-local-stand-in-for-its-cloud-built-from-scratch-by-ai-agents/) | 擷取時無 |
+| AWS unveils local emulator service to help enterprises accelerate app development and testing | 2026-11-11 | [InfoWorld](https://www.infoworld.com/article/4247383/aws-unveils-local-emulator-service-to-help-enterprises-accelerate-app-development-and-testing.html) | 擷取時無 |
+| A2UI 1.0: Build delightful, fast, reliable, agentic experiences | 2026-11-11 | [Google Developers Blog](https://developers.googleblog.com/a2ui-10-build-delightful-fast-reliable-agentic-experiences/) | 擷取時無 |
+| Google releases A2UI 1.0 for generative UI | 2026-11-11 | [SD Times](https://sdtimes.com/user-interface/google-releases-a2ui-1-0-for-generative-ui/) | 擷取時無 |
+| Introducing A2UI 1.0: What’s New in Google’s Framework-Agnostic Generative UI Protocol | 2026-11-11 | [CopilotKit](https://www.copilotkit.ai/blog/introducing-a2ui-1-0) | 擷取時無 |
+
+## 延伸閱讀方向
+
+- 以真實服務為參照的差分測試與契約測試
+- 本地 emulator 的錯誤注入、重試與雲端驗收分層
+- 代理修改的合併門檻與回歸測試可信度
+- 宣告式 UI 的元件目錄、授權與副作用控制
+- 非同步表單驗證的請求關聯與過期結果處理
