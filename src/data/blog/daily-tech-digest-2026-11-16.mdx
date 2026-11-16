@@ -1,0 +1,128 @@
+---
+title: "雲端支出封鎖、跨帳號密鑰複寫與 AI Scan API：2026-11-16 技術日報"
+description: "解析 Cloudflare Spend Management 的非同步封鎖、AWS Secrets Manager 跨帳號複寫限制，以及 GitHub AI Scan 設定與實際掃描的差別。"
+date: 2026-11-16
+tags: ["daily-digest", "cloudflare", "aws", "security", "github"]
+draft: false
+---
+
+## 涵蓋範圍與方法
+
+資料截點為 2026-11-16 09:00，Asia/Taipei，採此前 96 小時的公告。本期三則事件皆於 11 月 13 日發布，未重複前一期 AWS Emulator 與 A2UI 1.0。新聞不足以支持完整清單時，保留較少題目，快速重點只拆解入選事件。
+
+Cloudflare 交叉比對官方、Changes.Watch 與 Next F9；AWS 比對官方、Dev News Daily 與 Next F9；GitHub 比對官方、CASRAI 與 QualifiedPOC。這些是不同發布者的內容核對，不代表各方獨立實測。二手報導多依據廠商公告，具體行為以官方文件為準。以下程式碼是文件介面示例，未對正式帳號執行變更。
+
+## 重大頭條
+
+### Cloudflare 可在支出達標後封鎖產品，但不是精確帳單上限
+
+Cloudflare 於 11 月 13 日[推出 Spend Management Beta](https://blog.cloudflare.com/spend-management/)，先支援 PayGo 客戶的 Workers 與 Durable Objects。使用者可以設定通知或自動封鎖，不再只有預算警示。[Next F9](https://next-f9.com/daily-9/2026-11-15)與[Changes.Watch](https://www.changes.watch/updates/daily/2026-11-13)均記錄此項發布。
+
+為何重要：成本控制開始影響服務可用性。官方[計費文件](https://developers.cloudflare.com/billing/manage/spend-management/)明言，限制不保證最高帳單金額，因為計量與封鎖皆有延遲，部分費用在暫停期間仍會累積。產品級限制也可能同時中斷同帳號內的多個應用。
+
+### Secrets Manager 跨帳號複寫，把解密金鑰留在接收帳號
+
+AWS 於 11 月 13 日[新增跨帳號複寫](https://aws.amazon.com/about-aws/whats-new/2026/11/secrets-manager-cross-account/)，主密鑰值變更或輪替後，服務會更新另一帳號的副本。副本使用接收帳號擁有的 customer managed KMS key，並有自己的生命週期。[Dev News Daily](https://devnews.news/news/cloud/aws-secrets-manager-cross-account-replication-replica-kms-key-promote-standalone/)與[Next F9](https://next-f9.com/daily-9/2026-11-15)確認發布內容。
+
+為何重要：集中輪替不再必須讓消費端直接讀取來源帳號的 secret。不過，[使用指南](https://docs.aws.amazon.com/secretsmanager/latest/userguide/cross-account-replicate-secrets.html)限制主副本必須在相同 Region，每個主 secret 最多一個跨帳號副本。這不是任意多帳號、多區域的同步廣播。
+
+### GitHub AI Scan 增加 REST 設定，啟用不等於已掃描
+
+GitHub 於 11 月 13 日[開放 repository_scan 設定的 public preview](https://github.blog/changelog/2026-11-13-manage-ai-scan-for-repositories-using-the-rest-api/)，可以在組織或儲存庫層級以 REST API 管理。[CASRAI](https://casrai.org/news/github-ai-scan-repository-rest-controls-2026)與[QualifiedPOC](https://qualifiedpoc.ai/research/en/daily-enterprise-tech-brief-15-november-2026)亦記錄此變更。
+
+為何重要：安全團隊可以批次設定政策，但設定成功不會自動啟動分析。有寫入權限的使用者仍須按需執行掃描，每次掃描會消耗 GitHub Code Security AI credits。把「已啟用」當作「已檢查」會讓稽核報表失真。
+
+## 快速重點
+
+以下均為上述事件的技術細節，不另計為獨立新聞。
+
+- [Workers 限制](https://developers.cloudflare.com/billing/manage/spend-management/)涵蓋同帳號所有 Workers 的請求與 CPU 費用，不包含其他產品。
+- [Durable Objects](https://developers.cloudflare.com/billing/manage/spend-management/)暫停後，既有儲存資料仍可能產生費用。
+- [Cloudflare 的封鎖傳播](https://blog.cloudflare.com/spend-management/)不在每次請求同步詢問計價引擎，使用分散式本地狀態。
+- [支出週期](https://developers.cloudflare.com/billing/manage/spend-management/)依訂閱起算日，不一定是每月一日。
+- [AWS 主副本](https://docs.aws.amazon.com/secretsmanager/latest/userguide/cross-account-replicate-secrets.html)必須在同一 Region。
+- [AWS 複寫](https://docs.aws.amazon.com/secretsmanager/latest/userguide/cross-account-replicate-secrets.html)是最終一致，不能假設輪替後立刻可讀到新值。
+- [副本加密](https://docs.aws.amazon.com/secretsmanager/latest/userguide/cross-account-replicate-secrets.html)不能使用 AWS managed key `aws/secretsmanager`。
+- [AI Scan 組織政策](https://github.blog/changelog/2026-11-13-manage-ai-scan-for-repositories-using-the-rest-api/)停用時，個別儲存庫不能自行啟用。
+- [合併更新](https://github.blog/changelog/2026-11-13-manage-ai-scan-for-repositories-using-the-rest-api/)若任一設定被政策阻擋，回傳 422，兩項皆不修改。
+- [GitHub Enterprise Server](https://github.blog/changelog/2026-11-13-manage-ai-scan-for-repositories-using-the-rest-api/)不支援這項 AI Scan 功能。
+
+## 細節說明
+
+### 支出限制必須和服務中斷一起設計
+
+[Cloudflare 的實作說明](https://blog.cloudflare.com/spend-management/)將用量先聚合，再送入 Usage Engine 與 Rating Engine。第一階段通常以一分鐘窗口整理，第二階段通常以五分鐘窗口合併。計價引擎還需結合訂閱、內含額度、費率與進位規則，不能只把請求數乘上一個價格。用量與訂閱資料是不同串流，缺少訂閱資訊的用量會暫存等待，不被視為免費。達到門檻後，政策透過 runtime configuration 與 Quicksilver 非同步傳播，執行端定期更新本地狀態。
+
+這種設計避免每次請求等待計價服務，但也留下超額窗口。官方所稱低於十分鐘的近即時顯示，不應被解讀成逐請求扣款保證。Workers 的靜態資產若不需要執行 Worker 程式仍可繼續提供，需要 Worker 邏輯的路徑則可能失敗。測試環境與正式環境共用帳號時，測試暴增也可能耗盡共同額度。工程上應先決定可接受的中斷範圍，再選擇通知或封鎖，不能只填一個漂亮的預算數字。
+
+下列 payload 取自[官方公告的介面](https://blog.cloudflare.com/spend-management/)，展示明確啟用 Workers 封鎖政策。它會變更帳號行為，不能當作無副作用的查詢範例。
+
+```json
+{
+  "name": "Workers spending cap",
+  "product_id": "workers",
+  "enabled": true,
+  "threshold_cents": 10000,
+  "action": "usage_block",
+  "notification_email": "me@example.com"
+}
+```
+
+建立介面為 `POST /client/v4/accounts/{account_id}/billing/spend-policies`。金額單位是美分，並非整個應用的總支出。套用後還須讀回政策、核對目前週期已累積的金額，並演練解除封鎖。新增限制不會把當期用量歸零。限制觸發事件也不等於全球節點已完成封鎖或通知已成功寄達。
+
+### 跨帳號副本有自己的權限，卻仍依賴非同步資料傳遞
+
+[AWS 使用指南](https://docs.aws.amazon.com/secretsmanager/latest/userguide/cross-account-replicate-secrets.html)定義兩方參與的建立流程。接收帳號先建立副本、設定所需權限並指定主 secret；來源帳號再建立關聯，開始複寫。這比直接分享原 secret 多了一個接收端資源，但讓接收端可管理自己的存取政策與 KMS key。所謂不需共用 KMS key，不代表不需要 IAM 權限。公告中的「保持最新」也必須連同文件的最終一致限制解讀。
+
+狀態有 `Pending`、`InProgress`、`InSync`、`Failed` 與 `Detached`。應以 `DescribeSecret` 檢查複寫進度，而非只確認建立請求成功。輪替期間，後端憑證的有效時間與副本更新延遲需要一起測試。若來源先撤銷舊密碼，接收端卻尚未取得新值，應用仍可能認證失敗。這是本文提出的驗收情境，不是 AWS 宣稱已消除的問題。
+
+副本可在必要時轉為獨立 secret，但並不因此自動完成整個應用的容災切換。資料庫位置、網路與接收帳號權限仍須另行安排。同 Region 的限制也表示這項功能本身不是跨區域災難復原方案。副本使用自己的 KMS key，有助於分離解密權限；相同 secret 值仍可能因來源輪替或錯誤更新而影響消費端。備援設計應區分權限隔離、資料同步與可用性，而不是將它們視為同一件事。
+
+### AI Scan 設定 API 要讀回，掃描證據要另存
+
+[GitHub 新增的欄位](https://github.blog/changelog/2026-11-13-manage-ai-scan-for-repositories-using-the-rest-api/)可用於 `GET` 與 `PATCH /orgs/{org}/code-scanning/ai-scan`，以及對應的儲存庫端點。組織啟用後，儲存庫繼承設定並可個別退出；組織停用則禁止儲存庫啟用。企業政策若不允許，啟用請求回傳 422。組織擁有者與 security managers 管理組織設定，儲存庫管理員可以個別退出。權限、方案與企業政策都是部署前提，不能從 token 能讀取儲存庫推論它能修改安全設定。
+
+以下範例只展示 API 呼叫方式，預設在具備權限的測試組織執行。讀回設定是配置驗證，不是掃描驗證。
+
+```bash
+# 改前：只讀既有設定。
+gh api "orgs/$ORG/code-scanning/ai-scan"
+
+# 改後：明確設定 repository_scan，再讀回相同目標。
+gh api --method PATCH "orgs/$ORG/code-scanning/ai-scan" \
+  -f repository_scan=enabled
+gh api "orgs/$ORG/code-scanning/ai-scan"
+```
+
+如果同時提交 `pr_scan` 與 `repository_scan`，其中一項被阻擋就會整筆失敗，不能當作部分成功。此次發布不是掃描器從 preview 轉為 GA，也沒有新增自動掃描排程。[CASRAI](https://casrai.org/news/github-ai-scan-repository-rest-controls-2026)特別指出，掃描並不保證完整檢查每個檔案，AI findings 也需要人工判讀。稽核紀錄因此至少應分開保存設定狀態、實際執行時間與結果處理狀態。設定 API 解決管理規模，並未替團隊完成弱點驗證。
+
+## 值得追蹤的版本、RFC 與提案
+
+- [Spend Management Beta](https://blog.cloudflare.com/spend-management/)：追蹤產品範圍與封鎖延遲。跨產品應用或代理預算仍是官方後續方向，不能當作本次已交付能力。
+- [Secrets Manager 跨帳號複寫](https://docs.aws.amazon.com/secretsmanager/latest/userguide/cross-account-replicate-secrets.html)：追蹤輪替期間的狀態、失敗復原與解除關聯流程。
+- [AI Scan REST public preview](https://github.blog/changelog/2026-11-13-manage-ai-scan-for-repositories-using-the-rest-api/)：追蹤政策繼承、方案資格與 preview 介面變更。
+- 本期未納入達到相同查證標準的新 RFC，不以較舊提案補足篇幅。
+
+## 參考來源表
+
+公告日期如下；持續更新的文件標示為文件。擷取時未遇付費牆，二手摘要不等於獨立產品測試。
+
+| 原文標題 | 日期 | 來源連結 | 付費牆 |
+| --- | --- | --- | --- |
+| Introducing Spend Management: Spending limits and alerts for Cloudflare | 2026-11-13 | [Cloudflare](https://blog.cloudflare.com/spend-management/) | 無 |
+| Spending limits and alerts | 更新於 2026-11-13 | [Cloudflare Docs](https://developers.cloudflare.com/billing/manage/spend-management/) | 無 |
+| Developer changelog updates for Nov 13, 2026 | 2026-11-13 | [Changes.Watch](https://www.changes.watch/updates/daily/2026-11-13) | 無 |
+| Daily 9 November 15, 2026: Samsung Eyewear, Copilot Cuts, CFTC | 2026-11-15，事件為 11-13 | [Next F9](https://next-f9.com/daily-9/2026-11-15) | 無 |
+| AWS Secrets Manager now supports cross-account replication | 2026-11-13 | [AWS](https://aws.amazon.com/about-aws/whats-new/2026/11/secrets-manager-cross-account/) | 無 |
+| Replicate AWS Secrets Manager secrets across accounts | 持續更新文件 | [AWS Docs](https://docs.aws.amazon.com/secretsmanager/latest/userguide/cross-account-replicate-secrets.html) | 無 |
+| AWS Secrets Manager replicates secrets across accounts under the receiving account's KMS key | 報導事件為 2026-11-13 | [Dev News Daily](https://devnews.news/news/cloud/aws-secrets-manager-cross-account-replication-replica-kms-key-promote-standalone/) | 無 |
+| Manage AI Scan for repositories using the REST API | 2026-11-13 | [GitHub](https://github.blog/changelog/2026-11-13-manage-ai-scan-for-repositories-using-the-rest-api/) | 無 |
+| GitHub adds REST controls for repository AI Scan | 報導事件為 2026-11-13 | [CASRAI](https://casrai.org/news/github-ai-scan-repository-rest-controls-2026) | 無 |
+| Enterprise AI releases: 15 November 2026 | 2026-11-15，事件為 11-13 | [QualifiedPOC](https://qualifiedpoc.ai/research/en/daily-enterprise-tech-brief-15-november-2026) | 無 |
+
+## 延伸閱讀方向
+
+- 用量計價的串流順序、聚合窗口與延遲封鎖
+- 產品級預算與多應用故障範圍
+- Secret 輪替、最終一致與復原演練
+- 安全政策配置與實際掃描證據的分離
