@@ -1,0 +1,83 @@
+---
+title: "Solid 2.0 讓 memo 等待資料，jQuery 3.x 收束維護：2026-11-19 技術日報"
+description: "Solid 把非同步運算納入相依圖；jQuery 同步發布 4.1.0 與 3.8.0，兩條分支共用部分修正，但 AJAX 可取得的資訊不同。"
+date: 2026-11-19
+tags: ["daily-digest", "solidjs", "jquery", "javascript"]
+draft: false
+---
+
+## 涵蓋範圍與方法
+
+截至 11 月 19 日台北時間 09:00，本期選錄前端套件的兩起正式發布。公告日期與套件上架日期分列；API 行為以專案公告為準，另與技術媒體及 11 月 18 日的開發日報核對。
+
+## 重大頭條
+
+### Solid 2.0：資料還沒回來，誰負責等？
+
+[Solid 2.0 公告](https://www.solidjs.com/blog/solid-2-0-the-long-hold/)把 Promise 和非同步迭代器納入反應式相依圖。元件依賴的是運算結果，等待狀態由讀取該結果的位置處理。這對搜尋或切換個人檔案特別重要：第二次請求可能先完成，畫面應跟著目前的選取項目，而不是最後抵達的回應。
+
+### jQuery 同時發布兩版，維護承諾不同
+
+[jQuery 4.1.0 與 3.8.0 公告](https://blog.jquery.com/2026/11/17/jquery-4-1-0-and-3-8-0-released-passing-the-torch/)列出兩版共用的選擇器修正，也劃出維護界線。3.8.0 收錄多年來累積的修改，之後 3.x 只處理重大安全與程式錯誤。維護舊網站時，更新到 3.8.0 可以先取得修正；若新版功能是需求，仍得安排跨主版本測試。
+
+## 快速重點
+
+- [Solid 開發版診斷](https://www.solidjs.com/blog/solid-2-0-the-long-hold/)以 `STRICT_READ_UNTRACKED` 指出沒有追蹤相依性的讀取，訊息附原始碼位置。
+- [Solid server functions](https://www.solidjs.com/blog/solid-2-0-the-long-hold/)除了一問一答的 RPC，也支援透過 Server-Sent Events 持續傳送結果。
+- [jQuery 4.1.0](https://blog.jquery.com/2026/11/17/jquery-4-1-0-and-3-8-0-released-passing-the-torch/)的表單序列化會納入參與表單的自訂元素，不再光憑標籤名稱把它們排除。
+- [兩條 jQuery 分支](https://blog.jquery.com/2026/11/17/jquery-4-1-0-and-3-8-0-released-passing-the-torch/)都修正了選擇器比對可能耗去過多時間的問題；不必等到完成 4.x 移轉才更新。
+
+## 細節說明
+
+### 把讀取放在哪裡，決定誰看得到等待狀態
+
+以下元件接收可變動的使用者 ID；應用程式提供的 `fetchUser` 回傳含有姓名的 Promise。回呼在 memo 內讀取 ID，因此 ID 改變時會重新計算。元件在 `Loading` 內讀取姓名，第一次沒有資料時顯示替代文字。資料更新期間，`isPending` 則能用來標示畫面上仍保留的舊值。這兩種狀態值得分開測試：第一次進頁面沒有姓名可顯示，切換 ID 時卻可能還看得到上一筆。
+
+```tsx
+function Profile(props: { id: string }) {
+  const user = createMemo(() => fetchUser(props.id));
+  return (
+    <Loading fallback={<span>讀取中</span>}>
+      <span class={{ stale: isPending(user) }}>{user().name}</span>
+    </Loading>
+  );
+}
+```
+
+### 自訂 AJAX transport 不必靠參數順序傳回結果
+
+舊介面的位置參數仍然有效。兩個新版都允許自訂 transport 改用物件呼叫完成回呼，如下所示。具名欄位讓 transport 可以略過沒有的資訊，日後擴充也不必插入空參數。4.1.0 進一步在支援的 transport 上提供 `jqXHR.responseURL`，代表瀏覽器跟隨重新導向後的網址。JSONP 與 script transport 不提供這個值，IE 11 也不提供。若記錄的是最終目的地，欄位缺值時應保留「未知」，用起始網址補上反而會留下錯誤紀錄。
+
+```javascript
+// 舊式呼叫
+complete(200, "OK", { text: body }, rawHeaders);
+
+// 3.8.0 與 4.1.0 皆可用，擇一呼叫即可
+complete({
+  status: 200,
+  statusText: "OK",
+  responses: { text: body },
+  headers: rawHeaders,
+});
+```
+
+## 值得追蹤的版本
+
+- Solid 的公告標示 11 月 16 日；[TechMeasured 核對套件紀錄](https://techmeasured.com/repos/solid-2-0-stable-async-reactivity-server-functions-solidstart-retired-what-breaks)，2.0.0 於 17 日上架。相依套件若只宣告 Solid 版本下限，套件管理器允許安裝 2.0，不表示套件已經支援移除 `createResource` 後的新介面。
+- jQuery 4.x 移轉前，可先盤點外掛是否使用 [3.8.0 正式標記棄用的介面](https://techwhoknows.com/tech/jquery-410-and-380-released-passing-the-torch-to-4x)，例如 jQuery 原型上的 `push`、`sort` 與 `splice`；它們在 4.0.0 已移除。
+
+## 參考來源
+
+| 原文 | 發布日期 | 存取 |
+| --- | --- | --- |
+| [Solid 2.0 - The Long Hold](https://www.solidjs.com/blog/solid-2-0-the-long-hold/) | 11 月 16 日 | 公開 |
+| [jQuery 4.1.0 and 3.8.0 Released: Passing the Torch](https://blog.jquery.com/2026/11/17/jquery-4-1-0-and-3-8-0-released-passing-the-torch/) | 11 月 17 日 | 公開 |
+| [Solid 2.0 is stable: async built into reactivity, server functions in core, SolidStart retired. What breaks](https://techmeasured.com/repos/solid-2-0-stable-async-reactivity-server-functions-solidstart-retired-what-breaks) | 11 月 18 日 | 公開 |
+| [jQuery 4.1.0 and 3.8.0 Released: Passing the Torch to 4.x](https://techwhoknows.com/tech/jquery-410-and-380-released-passing-the-torch-to-4x) | 11 月 18 日 | 公開 |
+| [Dev News Digest: 18 Nov 2026, 06:00](https://dev.to/magnus_ferm/dev-news-digest-18-nov-2026-0600-1gp5) | 11 月 18 日 | 公開 |
+
+## 延伸閱讀方向
+
+- 非同步相依圖的競爭條件與等待邊界
+- 自訂表單元素的提交值與序列化
+- XHR 重新導向紀錄與 transport 差異
