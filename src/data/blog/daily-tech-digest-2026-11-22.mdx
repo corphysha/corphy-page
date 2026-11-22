@@ -1,0 +1,85 @@
+---
+title: "PostgreSQL 19 讓副本等到指定寫入，PHP 8.6 可預先綁定函式引數：2026-11-22 技術日報"
+description: "從訂單狀態讀到舊值，到 PHP 回呼的引數順序：兩個新版如何改寫應用程式與資料庫之間的程式碼。"
+date: 2026-11-22
+tags: ["daily-digest", "postgresql", "php"]
+draft: false
+---
+
+## 涵蓋範圍與方法
+
+本期選錄 11 月 19 日發布的兩個正式版本。版本與預設行為以專案公告為準；副本讀取範例另比對 Simon Willison 的實作說明，PHP 語法與相容性變更則對照 Phoronix 與 PHP.Watch。
+
+## 重大頭條
+
+### PostgreSQL 19：付款成功後，不必讓所有查詢都回主庫
+
+訂單已付款，重新整理卻顯示未付款，原因可能是查詢落在還沒重播該筆交易的副本。[PostgreSQL 19](https://www.postgresql.org/about/news/postgresql-19-released-3449/) 新增 `WAIT FOR LSN`。應用程式可以把「這次查詢至少要看見哪一筆寫入」交給副本判斷，不必猜要等幾毫秒，也不必把整個使用者工作階段綁在主庫。
+
+### PHP 8.6：同一個函式，可以先填好部分引數再交給呼叫端
+
+[PHP 8.6](https://www.php.net/releases/8.6/en.php) 允許在函式呼叫中用 `?` 保留引數位置，結果是一個 Closure。這對接收回呼的 API 特別實用：如果篩選器只提供一個值，但比較函式需要三個引數，就能先固定門檻與比較方式，把待測的值留給篩選器。
+
+## 快速重點
+
+- [PostgreSQL 的並行重整](https://www.postgresql.org/about/news/postgresql-19-released-3449/)可用 `REPACK (CONCURRENTLY)` 回收資料表空間。以往使用 `VACUUM FULL`，其他連線無法在重寫期間繼續讀寫該表。
+- [PostgreSQL 19 預設關閉 JIT](https://www.phoronix.com/news/PostgreSQL-19-Released)。估算成本不足以可靠判斷編譯是否划算；大量分析查詢仍值得用實際工作負載比較。
+- [PHP 的 Polling API](https://www.php.net/releases/8.6/en.php)讓事件迴圈程式庫透過同一組介面監看多個串流，Linux 可用 epoll，支援 kqueue 的系統則使用 kqueue。
+- [PHP 8.6 的相容性變更](https://php.watch/versions/8.6)包括 `trim()` 預設也會移除換頁字元。若檔案格式用它分頁，剖析器不宜在切頁前先對整段內容呼叫 `trim()`。
+
+## 細節說明
+
+### 把提交位置帶到下一次讀取
+
+LSN 是預寫日誌中的位置，不是經過的時間。以下假設資料表已有訂單 42。主庫先提交交易，再取得日誌位置；如果在提交前取值，副本抵達該位置時未必已重播提交紀錄。下一次請求把位置交給副本，等候成功才查訂單。這個保證只涵蓋指定位置之前的寫入，不代表副本此刻與主庫完全同步。
+
+```sql
+-- 主庫
+BEGIN;
+UPDATE orders SET status = 'paid' WHERE id = 42;
+COMMIT;
+SELECT pg_current_wal_insert_lsn();
+
+-- 副本：以下位置僅為範例，實際帶入上一步的結果
+WAIT FOR LSN '0/306EE20' WITH (TIMEOUT '0.1s');
+SELECT status FROM orders WHERE id = 42;
+```
+
+[Willison 的範例](https://simonwillison.net/2026/Nov/19/postgresql-19/)設定等候期限。逾時是錯誤，不是允許繼續讀取舊資料的訊號。付款確認頁可以改查主庫；若直接略過錯誤並查同一個副本，舊狀態就會再次出現在畫面上。
+
+### PHP 回呼在哪一步才真正執行？
+
+下例從套件版本清單挑出符合最低版本的項目。舊寫法用箭頭函式接住篩選器傳入的字串，再把它轉交給 `version_compare()`。新版把相同的位置留白。建立 `$eligible` 時不會比較任何版本；等到 `array_filter()` 逐項呼叫它，第一個引數才有值。這裡比較的是版本，而非字串排序，因此 `8.10` 應保留在結果中。
+
+```php
+$versions = ['8.5', '8.6', '8.10'];
+
+// PHP 8.5
+$eligible = fn ($v) => version_compare($v, '8.6', '>=');
+
+// PHP 8.6：取代上一行
+$eligible = version_compare(?, '8.6', '>=');
+$result = array_values(array_filter($versions, $eligible));
+// ['8.6', '8.10']
+```
+
+## 值得追蹤的版本
+
+- PostgreSQL 19.0：升級驗收應分開測試副本追上與逾時兩條路徑；只測沒有複寫延遲的情境，無法驗證備援讀取策略。
+- PHP 8.6.0：新語法需要新版剖析器。若套件仍支援 PHP 8.5，不能只靠執行時的版本判斷，把含有新語法的同一份檔案交給舊版載入。
+
+## 參考來源
+
+| 原文 | 日期 | 取用 |
+| --- | --- | --- |
+| [PostgreSQL 19 Released!](https://www.postgresql.org/about/news/postgresql-19-released-3449/) | 11/19 | 免費 |
+| [PostgreSQL 19 Released](https://simonwillison.net/2026/Nov/19/postgresql-19/) | 11/19 | 免費 |
+| [PostgreSQL 19 Released With More Performance Improvements](https://www.phoronix.com/news/PostgreSQL-19-Released) | 11/19 | 免費 |
+| [PHP 8.6 Release Announcement](https://www.php.net/releases/8.6/en.php) | 11/19 | 免費 |
+| [PHP 8.6 Released With Partial Function Application, Other New Features](https://www.phoronix.com/news/PHP-8.6-Released) | 11/19 | 免費 |
+| [PHP 8.6: What's New and Changed](https://php.watch/versions/8.6) | 版本索引，11/22 查閱 | 免費 |
+
+## 延伸閱讀方向
+
+- WAL 寫入位置、交易提交紀錄與副本重播位置的差別
+- PHP 部分函式套用與箭頭函式的引數綁定時機
