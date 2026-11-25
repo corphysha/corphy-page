@@ -1,0 +1,64 @@
+---
+title: "Shirudo 在修補前提供防護，Linux 七條穩定分支同步更新：2026-11-25 技術日報"
+description: "Shirudo 用 eBPF 保護仍在執行的服務；Linux 穩定版更新則說明，維運團隊該如何估算自己那條分支的測試範圍。"
+date: 2026-11-25
+tags: ["daily-digest", "linux", "ebpf"]
+draft: false
+---
+
+## 涵蓋範圍與方法
+
+本期聚焦 11 月 23 日的兩則 Linux 消息。Shirudo 的防護效果以專案團隊公開展示的案例為限；核心更新量按穩定分支分開計算，不把同一修正移植到不同分支的次數當成漏洞數。
+
+## 重大頭條
+
+### Shirudo 讓維運團隊在服務不停機時加一道檢查
+
+[OpenAI 與 Cisco 發布 Shirudo](https://openai.com/index/introducing-shirudo/)，讓維運人員用 eBPF 對執行中的 Linux 服務套用暫時防護。團隊在受控測試中讓 Elasticsearch 繼續處理請求，同時攔下觸發已知漏洞的輸入。這給需要等待維護時段的團隊多一個選項，但磁碟上的程式並沒有因此修好。
+
+### Linux 一天更新七條穩定分支，6.6 系列的變更最多
+
+[11 月 23 日的穩定版公告彙整](https://lwn.net/Articles/1108909/)列出七個版本。即使變更最少的 6.12.119，也有超過 1,700 筆修補；6.6.163 超過 3,300 筆。對採用固定核心分支的設備，版本號只差最後一碼，測試範圍卻可能橫跨開機、儲存與網路驅動程式。
+
+## 快速重點
+
+- [Shirudo 的防護規則](https://www.bleepingcomputer.com/news/security/new-shirudo-tool-uses-ai-to-shield-unpatched-linux-systems-from-exploits/)可先觀察再強制執行。簽章能確認載入的規則來自受信任的簽署者，不能證明合法請求不會遭到誤擋。
+- [6.18.65 發布公告](https://lists.openwall.net/linux-kernel/2026/11/23/774)明確建議使用 6.18 系列的使用者升級。這是同一分支內的更新，不需要為了採用它而切換到 7.3。
+
+## 細節說明
+
+### 規則通過驗證，與規則適合上線，是兩件事
+
+在 [Shirudo 展示案例](https://openai.com/index/introducing-shirudo/)中，檢查加在執行中 Java 程序的 Base64 解碼路徑，不必停掉整個 Elasticsearch 服務。若改成禁止服務解碼任何 Base64 資料，合法流量也會受影響。Shirudo 允許操作者在啟用阻擋前觀察規則會命中哪些請求。核心的 eBPF verifier 負責檢查程式是否符合核心的安全限制，不知道某一筆訂單或搜尋請求是否應該放行。TPM 能留下可驗證的規則載入或移除紀錄，仍不能代替應用程式的回歸測試。正式修補部署後，還要確認服務已執行新版，再撤下暫時規則。
+
+### 核心更新量該怎麼算
+
+[TechVeda 依 Git 紀錄統計](https://www.techveda.live/2026/11/24/record-stable-releases-ambarella-mainline/)，從 6.6.162 到 6.6.163 有 3,310 筆提交，包含發布版本本身。以下指令適用於已取得兩個標籤的 Linux stable 原始碼庫：
+
+```bash
+git rev-list --count v6.6.162..v6.6.163
+git diff --stat v6.6.162 v6.6.163 -- drivers/net/ethernet/
+```
+
+第一行算的是新版可追溯、舊版追溯不到的提交。第二行比較兩個版本下乙太網路驅動程式目錄的最終差異，因此無法用來還原第一行的數字。對網路設備而言，後者比較適合拿來挑選測試機型。即使該目錄沒有變更，也不能省略連線測試，因為網路堆疊與匯流排的修正不在這個目錄裡。
+
+## 值得追蹤的版本
+
+[本次發布的版本](https://lwn.net/Articles/1108909/)為 7.3.6、6.18.65、6.12.119、6.6.163、6.1.193、5.15.226 與 5.10.275。採用發行版核心時，應另查套件維護者的更新紀錄；上游標籤不能直接當作本機已安裝修正的證據。
+
+## 參考來源
+
+| 原文 | 日期 | 付費牆 |
+| --- | --- | --- |
+| [OpenAI and Cisco introduce Shirudo](https://openai.com/index/introducing-shirudo/) | 11/23 | 本次查閱未遇到 |
+| [Cisco and OpenAI pitch eBPF kernel plugins as the way to tame the patchpocalypse](https://www.theregister.com/security/2026/11/24/cisco-and-openai-pitch-ebpf-kernel-plugins-as-the-way-to-tame-the-patchpocalypse/5311795) | 11/24 | 本次查閱未遇到 |
+| [New Shirudo tool uses AI to shield unpatched Linux systems from exploits](https://www.bleepingcomputer.com/news/security/new-shirudo-tool-uses-ai-to-shield-unpatched-linux-systems-from-exploits/) | 11/24 | 本次查閱未遇到 |
+| [Linux 6.18.65](https://lists.openwall.net/linux-kernel/2026/11/23/774) | 11/23 | 本次查閱未遇到 |
+| [Seven stable kernels for Monday](https://lwn.net/Articles/1108909/) | 11/23 | 本次查閱未遇到 |
+| [Kernel & Embedded News: Record Stable Releases; Ambarella Goes Mainline](https://www.techveda.live/2026/11/24/record-stable-releases-ambarella-mainline/) | 11/24 | 本次查閱未遇到 |
+
+## 延伸閱讀方向
+
+- eBPF verifier 的檢查範圍與應用程式測試的分工
+- TPM 量測紀錄與規則簽章各能證明什麼
+- Linux stable 標籤、發行版套件與下游回移修正的對照方式
