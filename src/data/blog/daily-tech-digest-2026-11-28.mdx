@@ -1,0 +1,74 @@
+---
+title: "Workflow SDK 5.8 縮短步驟間等待，Cloudflare D1 按查詢紀錄建議索引：2026-11-28 技術日報"
+description: "Vercel 量出工作流程花在步驟之間的時間；D1 Insights 列出哪些查詢值得建索引，以及用來判斷的用量資料。"
+date: 2026-11-28
+tags: ["daily-digest", "sqlite", "cloudflare", "vercel"]
+draft: false
+---
+
+## 涵蓋範圍與方法
+
+本期選錄 11 月 25 日的兩項更新。Workflow 的時間數據來自 Vercel 的版本對照測試；D1 的 SQL 範例用來說明如何檢查建議，不代表正式環境的效能測量。
+
+## 重大頭條
+
+### Workflow SDK 5.8 把步驟之間的等待從 85 毫秒降到 7 毫秒
+
+[Vercel 比較 5.2.0 與 5.8.0](https://vercel.com/changelog/workflows-speculative-execution)，量的是上一步結束到下一步開始的額外時間，85 與 7 毫秒都是第 75 百分位數。許多短步驟串在一起，等待會累積；若流程大半時間都花在一次外部 API 呼叫，換引擎能省下的比例就小得多。
+
+### D1 Insights 把建議索引和受影響的查詢放在一起
+
+[Cloudflare D1 的更新](https://developers.cloudflare.com/changelog/post/2026-11-25-d1-index-recommendations/)會列出建議的 `CREATE INDEX`、預期受益的查詢，以及這些查詢的用量。維運人員可以先看昂貴的查詢一天究竟執行幾次，再決定是否值得讓每一筆新增資料多寫一份索引。列出建議並不會改動資料表。
+
+## 快速重點
+
+- [Vercel 的平行測試](https://vercel.com/changelog/workflows-speculative-execution)一次分派 256 個步驟。扣掉步驟本身的工作後，函式累計執行時間從 1,446 秒降至 105 秒。這是多個函式的時間總和，並非使用者少等了二十多分鐘。
+- [D1 的建議清單](https://developers.cloudflare.com/changelog/post/2026-11-25-d1-index-recommendations/)可在資料庫的 Metrics 分頁查看，也可以用 CLI 列出，無須先將建議寫進 migration。
+
+## 細節說明
+
+### 重試一筆已經成功的寫入
+
+Workflow 5.8 的新引擎能對可重試的步驟採用推測執行。[升級分析](https://www.findmilan.ca/blog/workflow-sdk-5-8-speculative-execution-guide)指出，測試時應比對最後留下的業務紀錄，不能只看工作流程是否成功。假設寫入收據後連線中斷，呼叫端可能沒收到成功回應。若重試時替同一筆付款產生新的識別碼，資料庫會把它當成第二張收據。以下 SQLite 範例以付款識別碼作為唯一鍵，讓同一筆付款重送時不再新增資料列：
+
+```sql
+CREATE TABLE receipts (payment_id TEXT PRIMARY KEY NOT NULL);
+INSERT INTO receipts VALUES ('pay-42')
+  ON CONFLICT(payment_id) DO NOTHING;
+```
+
+這個限制只保護資料表。若步驟還會向外部服務請款，外部服務也必須能依同一筆交易的識別碼辨認重送。
+
+### 用查詢計畫檢查索引的欄位順序
+
+假設訂單頁只顯示一位客戶最近的二十筆訂單。單獨替日期建索引，可以按時間讀取，但讀到的可能多半是別人的訂單。把客戶編號放在複合索引第一欄，SQLite 就能先定位該客戶，再依時間讀取。以下兩次查詢計畫使用同一個條件，中間只改索引：
+
+```sql
+CREATE TABLE orders (customer_id INTEGER, placed_at INTEGER);
+EXPLAIN QUERY PLAN SELECT placed_at FROM orders
+  WHERE customer_id = 42 ORDER BY placed_at DESC LIMIT 20;
+CREATE INDEX orders_customer_time ON orders(customer_id, placed_at DESC);
+EXPLAIN QUERY PLAN SELECT placed_at FROM orders
+  WHERE customer_id = 42 ORDER BY placed_at DESC LIMIT 20;
+```
+
+計畫能說明資料庫選了哪條讀取路徑，不能告知實際流量省下多少時間。[D1 的實作分析](https://jsplinter.nl/blog/d1-index-recommendations-what-to-apply-and-the-step-after-it/)建議在變更前後比較讀取列數；對寫入頻繁的資料表，還應分開觀察寫入成本。
+
+## 值得追蹤的版本與規格
+
+[workflow@5.8.0](https://vercel.com/changelog/workflows-speculative-execution) 是新引擎的起點。升級後啟動的新流程才會切換，已啟動的流程沿用原版本。自行使用第三方 World 後端時，還要確認它支援 World spec version 9。
+
+## 參考來源
+
+| 原文 | 日期 | 存取 |
+| --- | --- | --- |
+| [Workflow is 10x faster, again](https://vercel.com/changelog/workflows-speculative-execution) | 11 月 25 日 | 公開 |
+| [D1 Insights index recommendations](https://developers.cloudflare.com/changelog/post/2026-11-25-d1-index-recommendations/) | 11 月 25 日 | 公開 |
+| [Workflow SDK 5.8: Speculative Execution and Retry Checks Before Upgrading](https://www.findmilan.ca/blog/workflow-sdk-5-8-speculative-execution-guide) | 11 月 26 日 | 公開 |
+| [D1 index recommendations: what to apply and the step after it](https://jsplinter.nl/blog/d1-index-recommendations-what-to-apply-and-the-step-after-it/) | 11 月 27 日 | 公開 |
+| [This week's new AI releases](https://stackforvibes.com/new) | 11 月 27 日更新 | 公開 |
+
+## 延伸閱讀方向
+
+- 耐久工作流程中的重試語意與交易識別碼
+- SQLite 複合索引的排序方向與涵蓋索引
